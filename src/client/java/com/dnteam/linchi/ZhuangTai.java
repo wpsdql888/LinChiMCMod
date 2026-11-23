@@ -40,10 +40,14 @@ public class ZhuangTai {
 		if (now < lastScan) lastScan = 0;
 		int sec = PeiZhi.INS.gengXinMiao;
 		if (sec < 1) sec = 1; // 配置异常时兜底，别每帧全量扫背包
-		if (now - lastScan < sec * 1000L) return;
+		// 开着工作台时 250ms 扫一次：合完成品右侧剩余数要马上减，不能等 3 秒
+		boolean gongZuoTai = JianRong.currentScreen() instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen;
+		long wait = gongZuoTai ? 250L : sec * 1000L;
+		if (now - lastScan < wait) return;
 		lastScan = now;
 		jiShu = BeiBao.scan();
-		recalc();
+		// 目标没变，只需要按新背包数量重算展示行，不用再跑一遍递归求解
+		rebuild();
 	}
 
 	// 把配方结果 + 背包数量合成展示行，只在这里分配对象

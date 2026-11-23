@@ -130,7 +130,7 @@ public class GongFangZhiYin {
 					}
 					lines.add("共合成 " + pf.count + " 个");
 				}
-				lines.add("点击填入一组 / Shift 尽量多填");
+				lines.add("点击尽可能多填（每格最多 64 个）");
 				List<Component> comps = new ArrayList<>();
 				for (String line : lines) comps.add(Component.literal(line));
 				g.setTooltipForNextFrame(Minecraft.getInstance().font, comps, java.util.Optional.empty(), mx, my);
@@ -164,9 +164,9 @@ public class GongFangZhiYin {
 		int x = pl[0], y = pl[1], w = pl[2];
 		for (int i = 0; i < rows.size(); i++) {
 			int ry = y + i * ROW_H;
-			// 整行都是按钮，不再只认最右边那 30px 的“填入”两个字
+			// 整行都是按钮；点一下尽量填满，Shift 不再区分
 			if (GuiTool.hovered(e.x(), e.y(), x, ry, w, ROW_H - 1)) {
-				TianRu.fill(rows.get(i).bu.ming, e.hasShiftDown() ? 8 : 1);
+				TianRu.fillMax(rows.get(i).bu);
 				return true;
 			}
 		}
