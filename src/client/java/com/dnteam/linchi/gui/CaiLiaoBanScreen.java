@@ -517,9 +517,12 @@ public class CaiLiaoBanScreen extends Screen {
 				boolean dbl = now >= lastLeftAt && lastLeftKey != null
 					&& now - lastLeftAt <= DBL_MS && Math.abs(cy - lastLeftY) <= 8;
 				if (dbl) {
+					// 第一下已经展开/收起了，双击时先还原再开配方
+					WuPin prev = ShuJuKu.INS.get(lastLeftKey);
+					if (prev != null && prev.keHeCheng()) toggleNode(lastLeftKey);
 					selLeftKey = lastLeftKey;
-					selLeft = ShuJuKu.INS.get(lastLeftKey);
-					openThirdRecipe(selLeft, true);
+					selLeft = prev;
+					openThirdRecipe(prev, true);
 					lastLeftAt = 0;
 					return true;
 				}
