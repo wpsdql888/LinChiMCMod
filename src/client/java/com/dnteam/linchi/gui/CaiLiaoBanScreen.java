@@ -521,15 +521,6 @@ public class CaiLiaoBanScreen extends Screen {
 			int rowR = (cy - listTop - 2 - rightHead()) / ROW + rightScroll;
 			if (cx >= px + 6 && cx < px + third - 6 && rowL >= 0 && rowL < leftView.size()) {
 				MatRow r = leftView.get(rowL);
-				int w = third - 12;
-				boolean onToggleText = r.craftable && cx >= px + 6 + w - 6 - TOGGLE_W && cx < px + 6 + w - 6;
-				if (button == 1) {
-					selLeftKey = r.key; selLeft = ShuJuKu.INS.get(r.key);
-					// 右键点“展开/收起”只切换状态，别弹用途
-					if (onToggleText) { toggleNode(r.key); return true; }
-					openThirdUses(r.key);
-					return true;
-				}
 				long now = System.currentTimeMillis();
 				// 左栏展开/收起会让行换位置，双击按“同一个纵坐标”认，不按 key
 				boolean dbl = now >= lastLeftAt && lastLeftKey != null
@@ -547,17 +538,12 @@ public class CaiLiaoBanScreen extends Screen {
 				selLeftKey = r.key;
 				selLeft = ShuJuKu.INS.get(r.key);
 				lastLeftAt = now; lastLeftKey = r.key; lastLeftY = cy;
-				// 整行都能点，单击就展开/收起；不可合成的只选中
+				// 任何键单击：可合成的展开/收起，不可合成的只选中
 				if (r.craftable) toggleNode(r.key);
 				return true;
 			}
 			if (cx >= px + third + 6 && cx < px + third + 6 + rightListW() && rowR >= 0 && rowR < rightView.size()) {
 				WuPin wp = rightView.get(rowR);
-				if (button == 1) {
-					selRight = wp;
-					openThirdUses(wp.ming);
-					return true;
-				}
 				long now = System.currentTimeMillis();
 				boolean dbl = isDouble(now, lastRightAt, wp.ming, lastRightKey);
 				selRight = wp;
@@ -567,7 +553,7 @@ public class CaiLiaoBanScreen extends Screen {
 					return true;
 				}
 				lastRightAt = now; lastRightKey = wp.ming;
-				// 单击只选中；双击才开配方
+				// 任何键单击都只选中；连续双击才开配方/用途
 				return true;
 			}
 			// 配方面板里的材料：能展开就往里走一层
