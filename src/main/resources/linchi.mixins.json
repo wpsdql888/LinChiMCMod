@@ -1,0 +1,10 @@
+{
+	"required": true,
+	"package": "com.dnteam.linchi.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"CraftingScreenMixin",
+		"ScreenLifecycleMixin"
+	],
+	"minVersion": "0.8"
+}

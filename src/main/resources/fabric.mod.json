@@ -1,0 +1,34 @@
+{
+	"schemaVersion": 1,
+	"id": "linchi",
+	"version": "${version}",
+	"name": "LinChi 材料计算器",
+	"description": "一款服务于装载有LinsMagic插件的服务器玩家的便携易用方便计算器\n\n©2026 DNT Group(https://dnteam.top)\n模组作者:wpsdql888  信息提供:Lin",
+	"authors": [
+		"wpsdql888"
+	],
+	"contact": {
+		"homepage": "https://dnteam.top",
+		"sources": "https://dnteam.top"
+	},
+	"license": "©2026 DNT Group",
+	"icon": "icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.dnteam.linchi.LinChiMod"
+		],
+		"client": [
+			"com.dnteam.linchi.LinChiClient"
+		]
+	},
+	"mixins": [
+		"linchi.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": ">=26.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

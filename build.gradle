@@ -1,0 +1,50 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"linchi" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+	inputs.property "version", project.version
+	filesMatching("fabric.mod.json") {
+		// 只替换版本占位符。不要用 expand()：Groovy 模板会把 JSON 里的 \n
+		// 转义序列解释成真实换行，产出的 fabric.mod.json 会变成非法 JSON。
+		filter { line -> line.replace('${version}', project.version.toString()) }
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+base {
+	archivesName = "linchi-${project.minecraft_version}"
+}
