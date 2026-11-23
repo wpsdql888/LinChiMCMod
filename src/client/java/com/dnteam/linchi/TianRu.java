@@ -19,7 +19,8 @@ public class TianRu {
 
 	public static void fill(String targetMing) { fill(targetMing, 1); }
 
-	// sets > 1 时尽量多塞几组，每组最多 64 个，塞不下就停，不吭声
+	// sets 是填入组数：每轮往 3x3 每格放 1 个，跑 sets 轮 = 能连续合成 sets 次。
+	// 缺料的格子静默跳过，不提示；一组都填不进就提前停。
 	public static void fill(String targetMing, int sets) {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.level == null) return;
@@ -39,6 +40,10 @@ public class TianRu {
 		for (int x : craftSlots) if (x < 0) return;
 
 		try {
+			// PICKUP + button=1（右键）= 一次只放 1 个到目标格。
+			// 之前用左键(button=0)会把背包里整叠(最多64个)全塞进同一个合成格：
+			// 既浪费材料，又会因为第一格拿走了那一叠、导致共用同种材料的后续格子填不齐。
+			// 合成网格每格只需要 1 个物品，右键逐个放才符合原版/JEI 的习惯。
 			for (int round = 0; round < Math.max(1, sets); round++) {
 				boolean moved = false;
 				for (int i = 0; i < 9; i++) {
@@ -49,9 +54,9 @@ public class TianRu {
 					int bagSlot = findBagSlot(mc.player, base);
 					if (bagSlot < 0) continue; // 缺料就直接跳过，按需求不提示
 					int target = craftSlots[i];
-					mc.player.containerMenu.clicked(bagSlot, 0, ContainerInput.PICKUP, mc.player);
-					mc.player.containerMenu.clicked(target, 0, ContainerInput.PICKUP, mc.player);
-					// 目标格本来就有东西导致没放完，剩下的塞回背包那个槽
+					menu.clicked(bagSlot, 0, ContainerInput.PICKUP, mc.player); // 拾起一叠
+					menu.clicked(target, 1, ContainerInput.PICKUP, mc.player);  // 右键放 1 个
+					// 手上剩下的塞回背包那个槽，下一轮 / 下一格还能接着用
 					if (!menu.getCarried().isEmpty()) menu.clicked(bagSlot, 0, ContainerInput.PICKUP, mc.player);
 					moved = true;
 				}

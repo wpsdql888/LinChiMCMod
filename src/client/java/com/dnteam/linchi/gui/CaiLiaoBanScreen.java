@@ -137,9 +137,10 @@ public class CaiLiaoBanScreen extends Screen {
 	void recalc() {
 		List<QiuJie.Target> ts = new ArrayList<>();
 		for (QiuJie.Target t : added) ts.add(new QiuJie.Target(t.ming, t.count));
-		QiuJie q = QiuJie.run(ts);
-		curBase = new ArrayList<>(q.base.values());
+		// setTargets 内部会 recalc() -> QiuJie.run(targets)，求解结果存在 INS.latest。
+		// 之前这里又单独跑一遍 QiuJie.run()，同一份目标展开两遍，纯属浪费。
 		ZhuangTai.INS.setTargets(ts);
+		curBase = new ArrayList<>(ZhuangTai.INS.latest.base.values());
 		clampScroll();
 	}
 

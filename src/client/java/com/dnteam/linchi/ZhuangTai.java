@@ -35,6 +35,9 @@ public class ZhuangTai {
 	// 每 3 秒扫一次背包（间隔可在配置里改）
 	public void tick() {
 		long now = System.currentTimeMillis();
+		// 系统时间被往回调时 now < lastScan，差值变负数会让刷新永久停摆。
+		// 检测到回拨就把基准清零，下一帧立刻重扫一次。
+		if (now < lastScan) lastScan = 0;
 		int sec = PeiZhi.INS.gengXinMiao;
 		if (sec < 1) sec = 1; // 配置异常时兜底，别每帧全量扫背包
 		if (now - lastScan < sec * 1000L) return;

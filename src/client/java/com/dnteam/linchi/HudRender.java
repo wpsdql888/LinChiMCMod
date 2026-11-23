@@ -99,7 +99,7 @@ public class HudRender {
 			GuiTool.item(g, r.key, x, ry);
 			GuiTool.text(g, shortName(r.key), x + 22, ry + 2, 0xFFFFFFFF);
 			String qe = "缺" + r.que;
-			GuiTool.text(g, qe, x + w - 4 - mc.font.width(qe), ry + 2, 0xFFFF6666);
+			GuiTool.text(g, qe, x + w - 4 - textWidth(mc, qe), ry + 2, 0xFFFF6666);
 		}
 	}
 
@@ -117,20 +117,30 @@ public class HudRender {
 			if (wp != null) GuiTool.item(g, wp.base, x, ry);
 			GuiTool.text(g, "第" + (i + 1) + "步 " + r.bu.ming, x + 22, ry + 1, 0xFFFFD54F);
 			String rem = "剩" + r.remain;
-			GuiTool.text(g, rem, x + w - 4 - mc.font.width(rem), ry + 11, 0xFF7FE0FF);
+			GuiTool.text(g, rem, x + w - 4 - textWidth(mc, rem), ry + 11, 0xFF7FE0FF);
 		}
 	}
 
 	// 完成提示放准星上方，别挡着中间
 	private static final String DONE_MSG = "材料全部收集完毕 可以进行合成";
+	private static int doneMsgWidth = -1; // 字体固定，宽度算一次就够
 	private static void drawDone(GuiGraphicsExtractor g, Minecraft mc) {
 		int sw = mc.getWindow().getGuiScaledWidth();
 		int sh = mc.getWindow().getGuiScaledHeight();
 		String msg = DONE_MSG;
-		int w = mc.font.width(msg) + 20;
+		if (doneMsgWidth < 0) doneMsgWidth = mc.font.width(msg);
+		int w = doneMsgWidth + 20;
 		int x = (sw - w) / 2, y = sh / 2 - 64 + PeiZhi.INS.hudPianYiY;
 		g.fill(x, y, x + w, y + 22, 0xE0208020);
 		GuiTool.text(g, msg, x + 10, y + 6, 0xFFFFFFFF);
+	}
+
+	// "缺N" / "剩N" 每帧要量宽度对齐右侧，数字范围小，缓存起来别每帧量字体
+	private static final java.util.Map<String, Integer> WIDTH_CACHE = new java.util.HashMap<>();
+	private static int textWidth(Minecraft mc, String s) {
+		Integer w = WIDTH_CACHE.get(s);
+		if (w == null) { w = mc.font.width(s); WIDTH_CACHE.put(s, w); }
+		return w;
 	}
 
 	static int alphaBg() { return (PeiZhi.INS.hudTouMing << 24) | 0x101018; }
