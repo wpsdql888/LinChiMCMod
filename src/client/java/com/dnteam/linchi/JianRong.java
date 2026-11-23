@@ -44,18 +44,58 @@ public class JianRong {
 	public static Object currentScreen() {
 		try {
 			Object mc = Minecraft.getInstance();
+			Object gui = field(mc, "gui");
 			// 26.2+ ：mc.gui.screen()
-			try {
-				Object gui = mc.getClass().getField("gui").get(mc);
-				Method sm = gui.getClass().getMethod("screen");
-				return sm.invoke(gui);
-			} catch (Throwable ignored) {}
+			if (gui != null) {
+				try {
+					Method sm = gui.getClass().getMethod("screen");
+					return sm.invoke(gui);
+				} catch (Throwable ignored) {}
+			}
 			// 26.1 ：mc.screen 字段
-			try {
-				return mc.getClass().getField("screen").get(mc);
-			} catch (Throwable ignored) {}
+			Object s = field(mc, "screen");
+			if (s != null) return s;
 		} catch (Throwable ignored) {}
 		return null;
+	}
+
+	// 按名字找字段（public 直接读，private 就强开），找不到返回 null
+	private static Object field(Object obj, String name) {
+		try {
+			java.lang.reflect.Field f = obj.getClass().getField(name);
+			return f.get(obj);
+		} catch (Throwable ignored) {}
+		try {
+			java.lang.reflect.Field f = obj.getClass().getDeclaredField(name);
+			f.setAccessible(true);
+			return f.get(obj);
+		} catch (Throwable ignored) {}
+		return null;
+	}
+
+	// 读 KeyMapping 当前绑定的键值。不用 Fabric 的 KeyMappingHelper.getBoundKeyOf：
+	// 部分 fabric-api 版本没有这个方法，运行期直接抛错会让 CTRL+P 整个失效
+	// （N 键分支不调用它，所以表现成“N 正常、CTRL+P 完全没反应”）。
+	public static int boundKeyValue(net.minecraft.client.KeyMapping km) {
+		if (km == null) return -1;
+		try {
+			Object k = field(km, "key");
+			if (k != null) {
+				Method v = k.getClass().getMethod("getValue");
+				return (int) v.invoke(k);
+			}
+		} catch (Throwable ignored) {}
+		try { return km.getDefaultKey().getValue(); } catch (Throwable ignored) {}
+		return -1;
+	}
+
+	// 把按键的点击计数清零（压制原版按键消费时配套用，否则计数会积压到松键后补触发）
+	public static void resetClickCount(net.minecraft.client.KeyMapping km) {
+		try {
+			java.lang.reflect.Field f = net.minecraft.client.KeyMapping.class.getDeclaredField("clickCount");
+			f.setAccessible(true);
+			f.setInt(km, 0);
+		} catch (Throwable ignored) {}
 	}
 
 	// 当前界面里是否有 EditBox 正在获得焦点（正在打字）。

@@ -20,7 +20,7 @@ public class CaiLiaoBanScreen extends Screen {
 	private int px, py, pw, ph, third;
 	private int listTop, listBottom, matY, btnY;
 	private static final int ROW = 22;
-	private static final int RECIPE_W = 244;
+	private static final int RECIPE_W = 200;
 
 	private final List<QiuJie.Target> added = new ArrayList<>();
 	private WuPin selLeft, selRight;
@@ -87,6 +87,10 @@ public class CaiLiaoBanScreen extends Screen {
 		addRenderableWidget(Button.builder(Component.literal("添加"), b -> addSel()).bounds(px + third + 8, btnY, 66, 20).build());
 		addRenderableWidget(Button.builder(Component.literal("关闭"), b -> onClose())
 			.bounds(px + pw - 78, btnY, 70, 20).build());
+		// 目标清单是全局的（HUD 也要用）：重开材料板时把上次添加的恢复回来，
+		// 否则按 N 关掉再打开，列表就空了，像“材料不见了”
+		added.clear();
+		for (QiuJie.Target t : ZhuangTai.INS.targets) added.add(new QiuJie.Target(t.ming, t.count));
 		refreshViews();
 		recalc();
 	}
@@ -116,13 +120,15 @@ public class CaiLiaoBanScreen extends Screen {
 	private int rightHead() { return usesKey != null ? 18 : 0; }
 	private int leftRows() { return Math.max(1, (listBottom - listTop - 2) / ROW); }
 	private int rightRows() { return Math.max(1, (listBottom - listTop - 2 - rightHead()) / ROW); }
-	private int rightListW() { return showRecipe ? third * 2 - RECIPE_W - 16 : third * 2 - 12; }
+	private int rightListW() { return showRecipe ? third * 2 - RECIPE_W - 24 : third * 2 - 12; }
 	private int recipeX() { return px + third + 8 + rightListW() + 8; }
+	// 底部材料条宽度：配方视图时让到配方面板左边，别叠在一起
+	private int baseBarW() { return showRecipe ? recipeX() - px - 20 : pw - 16; }
 
 	private void clampScroll() {
 		leftScroll = Math.max(0, Math.min(leftScroll, Math.max(0, leftView.size() - leftRows())));
 		rightScroll = Math.max(0, Math.min(rightScroll, Math.max(0, rightView.size() - rightRows())));
-		int cols = Math.max(1, (showRecipe ? pw - third - RECIPE_W - 32 : pw - 16) / 42);
+		int cols = Math.max(1, baseBarW() / 42);
 		matScroll = Math.max(0, Math.min(matScroll, Math.max(0, curBase.size() - cols)));
 	}
 
@@ -163,12 +169,17 @@ public class CaiLiaoBanScreen extends Screen {
 
 	void openRecipe(WuPin wp, boolean fromLeft) {
 		if (wp == null || !wp.keHeCheng()) { showRecipe = false; return; }
+		// 配方视图和用途视图互斥，同时开着右栏会叠成一团
+		usesKey = null;
 		showRecipe = true; recipeFromLeft = fromLeft;
 		recipeTarget = wp; recipeHistory.clear(); recipePage = 0;
+		lastRightQ = "\u0000";
+		refreshViews();
 	}
 
 	void openUses(String key) {
 		if (key == null) return;
+		showRecipe = false; recipeHistory.clear();
 		usesKey = key;
 		lastRightQ = "\u0000";
 		refreshViews();
@@ -244,6 +255,14 @@ public class CaiLiaoBanScreen extends Screen {
 		g.fill(x, yy, x + 3, yy + bar, 0xFF8C7BF6);
 	}
 
+	// 9 格摊平结果按配方对象缓存：jiuGe 每帧跑一遍纯属浪费
+	private PeiFang gridPf;
+	private List<String> gridCache;
+	private List<String> gridOf(PeiFang pf) {
+		if (gridPf != pf) { gridPf = pf; gridCache = pf.jiuGe(); }
+		return gridCache;
+	}
+
 	private void drawRecipe(GuiGraphicsExtractor g, int mx, int my) {
 		WuPin wp = recipeTarget;
 		if (wp == null) return;
@@ -263,20 +282,20 @@ public class CaiLiaoBanScreen extends Screen {
 		GuiTool.text(g, (pf.mirror ? "魔镜" : "工作台") + (pfs.size() > 1 ? "  (" + (recipePage + 1) + "/" + pfs.size() + ") 滚轮切换" : "") + "  产出x" + pf.count,
 			rx + 8, listTop + 32, 0xFFAAAAAA);
 
-		List<String> grid = pf.jiuGe();
+		List<String> grid = gridOf(pf);
 		for (int i = 0; i < 9; i++) {
-			int gx = rx + 30 + (i % 3) * 50, gy = listTop + 54 + (i / 3) * 50;
+			int gx = rx + 22 + (i % 3) * 46, gy = listTop + 48 + (i / 3) * 46;
 			String k = grid.get(i);
-			boolean hov = k != null && GuiTool.hovered(mx, my, gx, gy, 44, 44);
-			GuiTool.panel(g, gx, gy, 44, 44, hov ? 0x70504580 : 0x50303040);
-			GuiTool.border(g, gx, gy, 44, 44, hov ? 0xFFB9A6FF : 0xFF605070);
-			if (k != null) GuiTool.item(g, k, gx + 14, gy + 14);
+			boolean hov = k != null && GuiTool.hovered(mx, my, gx, gy, 40, 40);
+			GuiTool.panel(g, gx, gy, 40, 40, hov ? 0x70504580 : 0x50303040);
+			GuiTool.border(g, gx, gy, 40, 40, hov ? 0xFFB9A6FF : 0xFF605070);
+			if (k != null) GuiTool.item(g, k, gx + 12, gy + 12);
 		}
-		GuiTool.text(g, "点材料可展开配方", rx + 8, listTop + 54 + 3 * 50, 0xFF888888);
+		GuiTool.text(g, "点材料可展开配方", rx + 8, listTop + 48 + 3 * 46 + 4, 0xFF888888);
 	}
 
 	private void drawBaseBar(GuiGraphicsExtractor g, int mx, int my) {
-		int bw = showRecipe ? pw - third - RECIPE_W - 32 : pw - 16;
+		int bw = baseBarW();
 		GuiTool.text(g, "基础材料 (" + curBase.size() + ")  滚轮翻动", px + 8, matY - 12, 0xFF7FE0FF);
 		GuiTool.panel(g, px + 6, matY, bw, 44, 0x50101018);
 		int cols = Math.max(1, bw / 42);
@@ -313,10 +332,14 @@ public class CaiLiaoBanScreen extends Screen {
 	public boolean mouseClicked(MouseButtonEvent e, boolean doubleClick) {
 		int cx = (int) e.x(), cy = (int) e.y();
 		int button = e.button();
+		// 点到搜索框：先显式把容器焦点交过去，再走原版分发。
+		// 有输入法/别的模组改动焦点链时，不主动这一步可能点了也 focus 不上（表现：光标在框里却打不了字）
+		if (GuiTool.hovered(cx, cy, px + 8, py + 50, third - 16, 20)) this.setFocused(searchLeft);
+		else if (GuiTool.hovered(cx, cy, px + third + 8, py + 50, third * 2 - 16, 20)) this.setFocused(searchRight);
 		// 右键搜索框直接清空，JEI 就是这个习惯
 		if (button == 1 && cy >= py + 50 && cy < py + 70) {
 			if (cx >= px + 8 && cx < px + third - 8) { searchLeft.setValue(""); return true; }
-			if (cx >= px + third + 8 && cx < px + third * 2 - 8) {
+			if (cx >= px + third + 8 && cx < px + pw - 8) {
 				if (usesKey != null) { usesKey = null; lastRightQ = "\u0000"; refreshViews(); }
 				else searchRight.setValue("");
 				return true;
@@ -351,9 +374,9 @@ public class CaiLiaoBanScreen extends Screen {
 			if (showRecipe && cx >= recipeX()) {
 				PeiFang pf = curPf();
 				if (pf != null) {
-					List<String> grid = pf.jiuGe();
+					List<String> grid = gridOf(pf);
 					for (int i = 0; i < 9; i++) {
-						int gx = recipeX() + 30 + (i % 3) * 50, gy = listTop + 54 + (i / 3) * 50;
+						int gx = recipeX() + 22 + (i % 3) * 46, gy = listTop + 48 + (i / 3) * 46;
 						String k = grid.get(i);
 						if (k != null && GuiTool.hovered(cx, cy, gx, gy, 44, 44)) {
 							WuPin next = ShuJuKu.INS.get(k);
@@ -399,8 +422,35 @@ public class CaiLiaoBanScreen extends Screen {
 		return true;
 	}
 
+	// 正在打字的搜索框（容器焦点可能和框自身焦点不一致，以框自身为准）
+	private EditBox focusedBox() {
+		if (searchLeft != null && searchLeft.isFocused()) return searchLeft;
+		if (searchRight != null && searchRight.isFocused()) return searchRight;
+		return null;
+	}
+
+	@Override
+	public boolean charTyped(net.minecraft.client.input.CharacterEvent e) {
+		// 显式转发给搜索框：个别版本/输入法组合下，原版容器分发到不了框
+		EditBox f = focusedBox();
+		if (f != null) return f.charTyped(e);
+		return super.charTyped(e);
+	}
+
+	@Override
+	public boolean preeditUpdated(net.minecraft.client.input.PreeditEvent e) {
+		// 中文输入法组字过程也要转给框，否则候选词上不去
+		EditBox f = focusedBox();
+		if (f != null) return f.preeditUpdated(e);
+		return super.preeditUpdated(e);
+	}
+
 	@Override
 	public boolean keyPressed(KeyEvent e) {
+		// 搜索框聚焦时先把按键交给框（Backspace 删字、方向键移动光标等）。
+		// 框不处理的键再走我们的全局手势，避免“光标在框里却打不了字”
+		EditBox f = focusedBox();
+		if (f != null && f.keyPressed(e)) return true;
 		// 全部用 InputConstants 常量：26.3 的键码和 26.1/26.2 完全不同。
 		// 硬编码数字会让 ESC/N/Ctrl+F/Backspace/翻页手势在 26.3 上失效。
 		// ESC 关闭。N 的关闭交给 tick 里的 toggle 统一处理，避免关完同帧被重开。

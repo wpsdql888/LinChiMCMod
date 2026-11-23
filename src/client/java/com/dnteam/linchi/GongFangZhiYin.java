@@ -21,12 +21,22 @@ public class GongFangZhiYin {
 	public static int panelX(Screen s) { return s.width / 2 + 96; }
 	public static int panelY(Screen s) { return s.height / 2 - 79 + 4; }
 
+	// 行视图缓存：craftRows 返回的是同一份列表实例，只有重建时才换。
+	// 每帧 subList+拷贝纯属浪费，这里只在数据源或页码变化时重算
+	private static java.util.List<ZhuangTai.BuRow> rowsSrc;
+	private static int rowsPage = -1;
+	private static List<ZhuangTai.BuRow> rowsView = new ArrayList<>();
+
 	private static List<ZhuangTai.BuRow> rows() {
 		List<ZhuangTai.BuRow> all = ZhuangTai.INS.craftRows();
 		int maxPage = Math.max(0, (all.size() - 1) / ROWS);
 		if (page > maxPage) page = maxPage;
+		if (rowsSrc == all && rowsPage == page) return rowsView;
 		int from = page * ROWS;
-		return new ArrayList<>(all.subList(from, Math.min(all.size(), from + ROWS)));
+		rowsView = new ArrayList<>(all.subList(from, Math.min(all.size(), from + ROWS)));
+		rowsSrc = all;
+		rowsPage = page;
+		return rowsView;
 	}
 
 	public static void draw(GuiGraphicsExtractor g, Screen s, int mx, int my) {

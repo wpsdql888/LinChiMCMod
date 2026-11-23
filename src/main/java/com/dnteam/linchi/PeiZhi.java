@@ -23,7 +23,7 @@ public class PeiZhi {
 	public int hudChatJianJu = 96;        // 左下给聊天框留的高度
 	public int hudPianYiX = 0;            // 横着挪一挪（正数往左）
 	public int hudPianYiY = 0;            // 完成提示上下挪一挪
-	public boolean shouCeSeen = false;    // 使用手册是否已首次弹出过
+	public int shouCeVer = 0;             // 已看过的手册版本号；低于当前版本就再弹一次
 
 	private static Path file() {
 		return Paths.get("config", "linchi.json");
@@ -47,7 +47,7 @@ public class PeiZhi {
 			hudChatJianJu = num(o, "hudChatJianJu", hudChatJianJu);
 			hudPianYiX = num(o, "hudPianYiX", hudPianYiX);
 			hudPianYiY = num(o, "hudPianYiY", hudPianYiY);
-			shouCeSeen = bool(o, "shouCeSeen", shouCeSeen);
+			shouCeVer = num(o, "shouCeVer", shouCeVer);
 		} catch (Exception e) {
 			LinChiMod.LOG.warn("配置读取失败，用默认值", e);
 		}
@@ -70,7 +70,7 @@ public class PeiZhi {
 			o.addProperty("hudChatJianJu", hudChatJianJu);
 			o.addProperty("hudPianYiX", hudPianYiX);
 			o.addProperty("hudPianYiY", hudPianYiY);
-			o.addProperty("shouCeSeen", shouCeSeen);
+			o.addProperty("shouCeVer", shouCeVer);
 			Files.write(p, o.toString().getBytes(StandardCharsets.UTF_8));
 		} catch (Exception e) {
 			LinChiMod.LOG.warn("配置保存失败", e);

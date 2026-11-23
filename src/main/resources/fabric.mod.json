@@ -11,7 +11,7 @@
 		"homepage": "https://dnteam.top",
 		"sources": "https://dnteam.top"
 	},
-	"license": "©2026 DNT Group",
+	"license": "Apache-2.0",
 	"icon": "icon.png",
 	"environment": "*",
 	"entrypoints": {

@@ -91,7 +91,7 @@ public class HudRender {
 			int ry = y + i * 20;
 			GuiTool.item(g, r.key, x, ry);
 			GuiTool.text(g, shortName(r.key), x + 22, ry + 2, 0xFFFFFFFF);
-			String qe = "-" + r.que;
+			String qe = "缺" + r.que;
 			GuiTool.text(g, qe, x + w - 4 - mc.font.width(qe), ry + 2, 0xFFFF6666);
 		}
 	}
@@ -127,13 +127,27 @@ public class HudRender {
 
 	static int alphaBg() { return (PeiZhi.INS.hudTouMing << 24) | 0x101018; }
 
+	// 物品显示名缓存：getHoverName 走原版翻译，中文客户端出来就是中文名
+	private static final java.util.Map<String, String> MING_CACHE = new java.util.HashMap<>();
+
 	static String shortName(String key) {
 		if (key == null) return "";
-		if (key.startsWith("minecraft:")) {
-			String s = key.substring(10);
-			WuPin wp = ShuJuKu.INS.get(s);
-			return wp != null ? wp.ming : s;
+		String n = MING_CACHE.get(key);
+		if (n != null) return n;
+		n = "";
+		try {
+			net.minecraft.world.item.ItemStack st = TuBiao.of(key);
+			if (!st.isEmpty()) n = st.getHoverName().getString();
+		} catch (Throwable ignored) {}
+		if (n.isEmpty()) {
+			// 兜底：原名逻辑
+			if (key.startsWith("minecraft:")) {
+				String s = key.substring(10);
+				WuPin wp = ShuJuKu.INS.get(s);
+				n = wp != null ? wp.ming : s;
+			} else n = key;
 		}
-		return key;
+		MING_CACHE.put(key, n);
+		return n;
 	}
 }

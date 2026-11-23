@@ -28,27 +28,34 @@ public class LinChiClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
 			// 背包扫描放 tick 里，按配置的秒数走。渲染那边只读结果
 			if (mc.player != null && mc.level != null) ZhuangTai.INS.tick();
-			// 首次安装进入世界后自动弹一次使用手册；只在没有其它界面时弹，避免打断玩家
-			if (!PeiZhi.INS.shouCeSeen && mc.player != null && mc.level != null
+			// 首次安装进入世界后自动弹一次使用手册；只在没有其它界面时弹，避免打断玩家。
+			// “已看过”的标记在手册关闭时才写入（见 ShouCeScreen.onClose），
+			// 这样即使弹出时游戏崩溃，下次进游戏仍会再弹一次。
+			if (PeiZhi.INS.shouCeVer < com.dnteam.linchi.gui.ShouCeScreen.CUR_VER
+				&& mc.player != null && mc.level != null
 				&& JianRong.currentScreen() == null) {
-				PeiZhi.INS.shouCeSeen = true;
-				PeiZhi.INS.save();
 				mc.setScreenAndShow(new com.dnteam.linchi.gui.ShouCeScreen(null));
 			}
 			while (keyPeiZhi.consumeClick()) {
 				if (mc.player == null) continue;
-				Object cur = JianRong.currentScreen();
-				// 正在搜索框打字时不响应开关，否则输入 P 会误关面板
-				if (cur != null && JianRong.isTyping(cur)) continue;
-				// 默认绑定 P：要求按住 CTRL；玩家改成别的键则单独按下即可
-				int bound = KeyMappingHelper.getBoundKeyOf(keyPeiZhi).getValue();
-				if (bound == InputConstants.KEY_P && !ctrlDown()) continue;
+				try {
+					Object cur = JianRong.currentScreen();
+					// 正在搜索框打字时不响应开关，否则输入 P 会误关面板
+					if (cur != null && JianRong.isTyping(cur)) continue;
+					// 默认绑定 P：要求按住 CTRL；玩家改成别的键则单独按下即可。
+					// 用反射读绑定键而不用 Fabric 的 getBoundKeyOf：部分 fabric-api
+					// 版本缺该方法，运行期抛错会让 CTRL+P 分支整个失效。
+					int bound = JianRong.boundKeyValue(keyPeiZhi);
+					if (bound == InputConstants.KEY_P && !ctrlDown()) continue;
 				// toggle 统一在这里做：面板自己的 keyPressed 不再管 P，避免关完
 				// 同一帧又被 tick 重开。当前界面用反射取（26.1 字段 / 26.2+ 方法）。
-				if (cur instanceof com.dnteam.linchi.gui.PeiZhiScreen)
-					mc.setScreenAndShow(null);
-				else
-					mc.setScreenAndShow(new com.dnteam.linchi.gui.PeiZhiScreen(null));
+					if (cur instanceof com.dnteam.linchi.gui.PeiZhiScreen)
+						mc.setScreenAndShow(null);
+					else
+						mc.setScreenAndShow(new com.dnteam.linchi.gui.PeiZhiScreen(null));
+				} catch (Throwable t) {
+					LinChiMod.LOG.warn("CTRL+P 处理失败（不影响其他功能）", t);
+				}
 			}
 			while (keyCaiLiao.consumeClick()) {
 				if (mc.player == null) continue;

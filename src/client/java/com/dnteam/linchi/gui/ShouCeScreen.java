@@ -11,6 +11,9 @@ import net.minecraft.network.chat.Component;
 // 游戏内使用手册：9 页翻页，首次进游戏自动弹一次，之后可在 CTRL+P 配置面板里重开。
 // 风格与配置面板一致（全屏暗底 + 左上角图标 + 顶部版权鸣谢）。
 public class ShouCeScreen extends Screen {
+	// 手册内容结构版本。内容大改就 +1，老玩家的配置里版本号低会再弹一次
+	public static final int CUR_VER = 2;
+
 	private final Screen parent;
 	private int page = 0;
 
@@ -191,6 +194,9 @@ public class ShouCeScreen extends Screen {
 
 	@Override
 	public void onClose() {
+		// 看完（或关掉）才标记版本号并保存：弹出瞬间崩溃的话，下次进游戏还能再弹
+		com.dnteam.linchi.PeiZhi.INS.shouCeVer = CUR_VER;
+		com.dnteam.linchi.PeiZhi.INS.save();
 		Minecraft.getInstance().setScreenAndShow(parent);
 	}
 }

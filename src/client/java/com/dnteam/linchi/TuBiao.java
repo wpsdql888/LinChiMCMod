@@ -17,7 +17,10 @@ public class TuBiao {
 	public static ItemStack of(String key) {
 		if (key == null) return ItemStack.EMPTY;
 		String base = ShuJuKu.INS.baseOf(key);
-		if (base == null) return ItemStack.EMPTY;
+		// baseOf 只认 "minecraft:xxx" 和魔法物品中文名；
+		// 魔法物品的 base 字段是裸 id（如 "goat_horn"），baseOf 会返回 null，
+		// 这里兜底把 key 本身当原版 id 再试一次，否则列表/HUD 里魔法物品永远没图标
+		if (base == null) return fromBase(key);
 		return fromBase(base);
 	}
 
