@@ -17,6 +17,11 @@ public class ShouCeScreen extends Screen {
 	private final Screen parent;
 	private int page = 0;
 
+	// 折行结果缓存：手册内容固定，只有屏宽变了才需要重算。
+	// 之前每帧对整页逐字符 font.width + 拼字符串，停留一页时纯属空转。
+	private java.util.List<java.util.List<String>> wrapCache;
+	private int wrapCacheWidth = -1;
+
 	private Button prev;
 	private Button next;
 	private Button pageBtn;
@@ -115,6 +120,7 @@ public class ShouCeScreen extends Screen {
 
 	private void go(int d) {
 		page = Math.max(0, Math.min(PAGES.length - 1, page + d));
+		wrapCache = null; // 换页了，折行缓存作废
 		sync();
 	}
 
@@ -122,6 +128,16 @@ public class ShouCeScreen extends Screen {
 		if (prev != null) prev.active = page > 0;
 		if (next != null) next.active = page < PAGES.length - 1;
 		if (pageBtn != null) pageBtn.setMessage(Component.literal("第 " + (page + 1) + " / " + PAGES.length + " 页"));
+	}
+
+	// 当前页所有段落的折行结果，屏宽变了自动重算
+	private java.util.List<java.util.List<String>> pageLines(int maxW, int screenW) {
+		if (wrapCache != null && wrapCacheWidth == screenW) return wrapCache;
+		wrapCacheWidth = screenW;
+		wrapCache = new java.util.ArrayList<>();
+		String[] pg = PAGES[page];
+		for (int i = 1; i < pg.length; i++) wrapCache.add(wrap(pg[i], maxW));
+		return wrapCache;
 	}
 
 	// 按像素宽度把一段文字折成多行（按字符拆，兼容中文无空格的情况）
@@ -170,9 +186,10 @@ public class ShouCeScreen extends Screen {
 		GuiTool.text(g, pg[0], x, y, 0xFFFFD54F);
 		y += 28;
 
-		for (int i = 1; i < pg.length && y < panelY + panelH - 16; i++) {
-			int color = (i == 1) ? 0xFF9AD0FF : 0xFFE0E0E0;
-			for (String line : wrap(pg[i], maxTextW)) {
+		java.util.List<java.util.List<String>> lines = pageLines(maxTextW, this.width);
+		for (int i = 0; i < lines.size() && y < panelY + panelH - 16; i++) {
+			int color = (i == 0) ? 0xFF9AD0FF : 0xFFE0E0E0;
+			for (String line : lines.get(i)) {
 				if (y > panelY + panelH - 20) break;
 				GuiTool.text(g, line, x, y, color);
 				y += 16;

@@ -16,6 +16,10 @@ public class ZhuangTai {
 	private final ArrayList<CaiRow> hudCache = new ArrayList<>();
 	private final ArrayList<BuRow> craftCache = new ArrayList<>();
 	private boolean doneCache = false;
+	// 数据每次 rebuild 都 +1，供外部缓存判断“列表变没变”。
+	// 只比对列表实例是不行的：craftCache 是同一个对象，clear 后重填引用不变。
+	private int version = 0;
+	public int version() { return version; }
 
 	public void setTargets(List<QiuJie.Target> ts) {
 		targets.clear();
@@ -31,7 +35,9 @@ public class ZhuangTai {
 	// 每 3 秒扫一次背包（间隔可在配置里改）
 	public void tick() {
 		long now = System.currentTimeMillis();
-		if (now - lastScan < PeiZhi.INS.gengXinMiao * 1000L) return;
+		int sec = PeiZhi.INS.gengXinMiao;
+		if (sec < 1) sec = 1; // 配置异常时兜底，别每帧全量扫背包
+		if (now - lastScan < sec * 1000L) return;
 		lastScan = now;
 		jiShu = BeiBao.scan();
 		recalc();
@@ -64,6 +70,7 @@ public class ZhuangTai {
 			}
 		}
 		craftCache.trimToSize();
+		version++;
 	}
 
 	// 魔法物品中文名 -> 背包里对应实际物品(base)的拥有数量

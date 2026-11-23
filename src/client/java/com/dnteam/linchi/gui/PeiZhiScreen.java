@@ -22,7 +22,7 @@ public class PeiZhiScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		int sy = 96;
+		int sy = 110;
 		addToggle(cx - 190, sy, "材料信息HUD", () -> PeiZhi.INS.hudKai, v -> PeiZhi.INS.hudKai = v);
 		addToggle(cx - 190, sy + 26, "辅助合成HUD", () -> PeiZhi.INS.zhuGongKai, v -> PeiZhi.INS.zhuGongKai = v);
 		addToggle(cx - 190, sy + 52, "版本检测", () -> PeiZhi.INS.jianCeBanBen, v -> PeiZhi.INS.jianCeBanBen = v);
@@ -88,7 +88,8 @@ public class PeiZhiScreen extends Screen {
 		GuiTool.text(g, "©2026 DNT Group (https://dnteam.top)", 76, 36, 0xFFAAAAAA);
 		GuiTool.text(g, "一款服务于装载有LinsMagic插件的服务器玩家的便携易用方便计算器", 76, 52, 0xFF9AD0FF);
 		GuiTool.text(g, "鸣谢", this.width / 2 - 100, 66, 0xFFFFD54F);
-		GuiTool.text(g, "模组作者:wpsdql888  信息提供:Lin  Github:github.com/wpsdql888/LinChiMCMod", this.width / 2 - 140, 80, 0xFFDDDDDD);
+		GuiTool.text(g, "模组作者: wpsdql888    信息提供: Lin", this.width / 2 - 140, 80, 0xFFDDDDDD);
+		GuiTool.text(g, "Github: github.com/wpsdql888/LinChiMCMod", this.width / 2 - 140, 92, 0xFF9AD0FF);
 		super.extractRenderState(g, mx, my, delta);
 		GuiTool.text(g, "ESC / CTRL+P 关闭    数值点 < > 调整，热键在原版控制设置里改", this.width / 2 - 200, this.height - 56, 0xFF888888);
 	}

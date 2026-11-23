@@ -32,6 +32,7 @@ public class ShuJuKu {
 				wp.ming = str(o, "n");
 				wp.mingLower = wp.ming == null ? "" : wp.ming.toLowerCase(Locale.ROOT);
 				wp.fenLei = str(o, "c");
+				wp.fenLeiLower = wp.fenLei == null ? "" : wp.fenLei.toLowerCase(Locale.ROOT);
 				wp.base = str(o, "b");
 				wp.huoQu = str(o, "o");
 				if (o.has("r")) wp.gongFang = parsePf(o.getAsJsonObject("r"), false);
@@ -109,7 +110,7 @@ public class ShuJuKu {
 		if (hit != null) return hit;
 		ArrayList<WuPin> out = new ArrayList<>();
 		for (WuPin wp : all) {
-			if (wp.mingLower.contains(q) || (wp.fenLei != null && wp.fenLei.toLowerCase(Locale.ROOT).contains(q))) out.add(wp);
+			if (wp.mingLower.contains(q) || wp.fenLeiLower.contains(q)) out.add(wp);
 		}
 		out.trimToSize();
 		souCache.put(q, out);

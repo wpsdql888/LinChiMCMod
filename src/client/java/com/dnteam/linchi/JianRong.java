@@ -3,8 +3,20 @@ package com.dnteam.linchi;
 import net.minecraft.client.Minecraft;
 import java.lang.reflect.*;
 
-// 兼容 26.1/26.2/26.3 之间的 API 差异（全程反射，不绑死任何签名）
+// 兼容 26.1/26.2/26.3 之间的 API 差异（全程反射，不绑死任何签名）。
+// 反射查找（Class.forName / getMethod / getField）只做一次并缓存 Method、Field 对象，
+// 因为 currentScreen() 每 tick 会调多次、ctrlDown() 每次按键都调 —— 每次都遍历
+// getMethods() 是实打实的持续开销。
 public class JianRong {
+
+	// ---- 缓存的反射成员（延迟初始化；取不到就保持 null 并每次重试，不缓存失败）----
+	private static Method M_ISKEYDOWN_1, M_ISKEYDOWN_2;
+	private static Field F_LCONTROL, F_RCONTROL;
+	private static Field F_MC_GUI, F_MC_SCREEN;
+	private static Method M_GUI_SCREEN;
+	private static boolean GUI_SCREEN_TRIED; // 26.1 没有 gui.screen()，别每帧重试失败的查找
+	private static Field F_KM_KEY, F_KM_CLICKCOUNT;
+	private static Method M_KEYVALUE;
 
 	// 返回 Minecraft 的 Window 对象本身（不是 long 句柄）。
 	// 旧代码在这里找 "getWindow()" 返回 long 的方法，但各版本的 Window 类里
@@ -44,45 +56,53 @@ public class JianRong {
 	public static Object currentScreen() {
 		try {
 			Object mc = Minecraft.getInstance();
-			Object gui = field(mc, "gui");
 			// 26.2+ ：mc.gui.screen()
+			if (F_MC_GUI == null) F_MC_GUI = findField(mc.getClass(), "gui");
+			Object gui = F_MC_GUI == null ? null : F_MC_GUI.get(mc);
 			if (gui != null) {
-				try {
-					Method sm = gui.getClass().getMethod("screen");
-					return sm.invoke(gui);
-				} catch (Throwable ignored) {}
+				if (M_GUI_SCREEN == null && !GUI_SCREEN_TRIED) {
+					GUI_SCREEN_TRIED = true;
+					try { M_GUI_SCREEN = gui.getClass().getMethod("screen"); }
+					catch (Throwable ignored) {}
+				}
+				if (M_GUI_SCREEN != null) return M_GUI_SCREEN.invoke(gui);
 			}
 			// 26.1 ：mc.screen 字段
-			Object s = field(mc, "screen");
-			if (s != null) return s;
+			if (F_MC_SCREEN == null) F_MC_SCREEN = findField(mc.getClass(), "screen");
+			if (F_MC_SCREEN != null) return F_MC_SCREEN.get(mc);
 		} catch (Throwable ignored) {}
 		return null;
 	}
 
 	// 按名字找字段（public 直接读，private 就强开），找不到返回 null
-	private static Object field(Object obj, String name) {
+	private static Field findField(Class<?> cls, String name) {
 		try {
-			java.lang.reflect.Field f = obj.getClass().getField(name);
-			return f.get(obj);
+			Field f = cls.getField(name);
+			f.setAccessible(true);
+			return f;
 		} catch (Throwable ignored) {}
 		try {
-			java.lang.reflect.Field f = obj.getClass().getDeclaredField(name);
+			Field f = cls.getDeclaredField(name);
 			f.setAccessible(true);
-			return f.get(obj);
+			return f;
 		} catch (Throwable ignored) {}
 		return null;
 	}
 
-	// 读 KeyMapping 当前绑定的键值。不用 Fabric 的 KeyMappingHelper.getBoundKeyOf：
+	// 读 KeyMapping 当前绑定的键值。不用 Fabric 的 KeyMappingHelper.getBoundOf：
 	// 部分 fabric-api 版本没有这个方法，运行期直接抛错会让 CTRL+P 整个失效
 	// （N 键分支不调用它，所以表现成“N 正常、CTRL+P 完全没反应”）。
 	public static int boundKeyValue(net.minecraft.client.KeyMapping km) {
 		if (km == null) return -1;
 		try {
-			Object k = field(km, "key");
+			if (F_KM_KEY == null) F_KM_KEY = findField(net.minecraft.client.KeyMapping.class, "key");
+			Object k = F_KM_KEY == null ? null : F_KM_KEY.get(km);
 			if (k != null) {
-				Method v = k.getClass().getMethod("getValue");
-				return (int) v.invoke(k);
+				if (M_KEYVALUE == null) {
+					try { M_KEYVALUE = k.getClass().getMethod("getValue"); }
+					catch (Throwable ignored) {}
+				}
+				if (M_KEYVALUE != null) return (int) M_KEYVALUE.invoke(k);
 			}
 		} catch (Throwable ignored) {}
 		try { return km.getDefaultKey().getValue(); } catch (Throwable ignored) {}
@@ -91,10 +111,11 @@ public class JianRong {
 
 	// 把按键的点击计数清零（压制原版按键消费时配套用，否则计数会积压到松键后补触发）
 	public static void resetClickCount(net.minecraft.client.KeyMapping km) {
+		if (km == null) return;
 		try {
-			java.lang.reflect.Field f = net.minecraft.client.KeyMapping.class.getDeclaredField("clickCount");
-			f.setAccessible(true);
-			f.setInt(km, 0);
+			if (F_KM_CLICKCOUNT == null)
+				F_KM_CLICKCOUNT = findField(net.minecraft.client.KeyMapping.class, "clickCount");
+			if (F_KM_CLICKCOUNT != null) F_KM_CLICKCOUNT.setInt(km, 0);
 		} catch (Throwable ignored) {}
 	}
 
@@ -117,24 +138,30 @@ public class JianRong {
 		return false;
 	}
 
-	// CTRL 是否按下
+	// CTRL 是否按下。isKeyDown 在 getMethods() 里只找一次并缓存。
 	public static boolean ctrlDown() {
 		try {
-			Class<?> ic = Class.forName("com.mojang.blaze3d.platform.InputConstants");
-			int lc = ic.getField("KEY_LCONTROL").getInt(null);
-			int rc = ic.getField("KEY_RCONTROL").getInt(null);
-			Object win = windowObject();
-			for (Method m : ic.getMethods()) {
-				if (!m.getName().equals("isKeyDown")) continue;
-				Class<?>[] p = m.getParameterTypes();
-				try {
-					if (p.length == 1 && p[0] == int.class) {
-						if ((boolean)m.invoke(null, lc) || (boolean)m.invoke(null, rc)) return true;
-					} else if (p.length == 2 && p[1] == int.class && win != null && p[0].isInstance(win)) {
-						if ((boolean)m.invoke(null, win, lc) || (boolean)m.invoke(null, win, rc)) return true;
-					}
-				} catch (Throwable ignored) {}
+			if (F_LCONTROL == null || F_RCONTROL == null) {
+				Class<?> ic = Class.forName("com.mojang.blaze3d.platform.InputConstants");
+				F_LCONTROL = ic.getField("KEY_LCONTROL");
+				F_RCONTROL = ic.getField("KEY_RCONTROL");
 			}
+			int lc = F_LCONTROL.getInt(null), rc = F_RCONTROL.getInt(null);
+			if (M_ISKEYDOWN_1 == null && M_ISKEYDOWN_2 == null) {
+				Class<?> ic = Class.forName("com.mojang.blaze3d.platform.InputConstants");
+				for (Method m : ic.getMethods()) {
+					if (!m.getName().equals("isKeyDown")) continue;
+					Class<?>[] p = m.getParameterTypes();
+					if (p.length == 1 && p[0] == int.class) M_ISKEYDOWN_1 = m;
+					else if (p.length == 2 && p[1] == int.class
+						&& p[0].getName().endsWith("Window")) M_ISKEYDOWN_2 = m;
+				}
+			}
+			Object win = windowObject();
+			if (M_ISKEYDOWN_1 != null)
+				return (boolean) M_ISKEYDOWN_1.invoke(null, lc) || (boolean) M_ISKEYDOWN_1.invoke(null, rc);
+			if (M_ISKEYDOWN_2 != null && win != null && M_ISKEYDOWN_2.getParameterTypes()[0].isInstance(win))
+				return (boolean) M_ISKEYDOWN_2.invoke(null, win, lc) || (boolean) M_ISKEYDOWN_2.invoke(null, win, rc);
 		} catch (Throwable ignored) {}
 		return false;
 	}

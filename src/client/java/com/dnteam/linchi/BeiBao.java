@@ -19,12 +19,13 @@ public class BeiBao {
 		public int que(String key, int need) { return Math.max(0, need - you(key)); }
 	}
 
-	private static String keyOf(ItemStack st) {
+	// 返回物品注册表 id 的 path（小写），空栈返回 null。
+	// 一次查询既判断是不是潜影盒、又生成统计用的 key，避免每个物品查两次注册表。
+	private static String pathOf(ItemStack st) {
 		if (st.isEmpty()) return null;
 		try {
 			Identifier id = BuiltInRegistries.ITEM.getKey(st.getItem());
-			if (id == null) return null;
-			return "minecraft:" + id.getPath();
+			return id == null ? null : id.getPath();
 		} catch (Exception e) {
 			return null;
 		}
@@ -38,11 +39,13 @@ public class BeiBao {
 		for (int i = 0; i < inv.getContainerSize(); i++) {
 			ItemStack st = inv.getItem(i);
 			if (st.isEmpty()) continue;
-			String key = keyOf(st);
-			if (key != null && !key.contains("shulker_box")) {
-				js.owned.merge(key, st.getCount(), Integer::sum);
+			String path = pathOf(st);
+			if (path == null) continue;
+			if (!path.contains("shulker_box")) {
+				js.owned.merge("minecraft:" + path, st.getCount(), Integer::sum);
+			} else {
+				scanShulker(st, js);
 			}
-			scanShulker(st, js);
 		}
 		return js;
 	}
@@ -50,13 +53,11 @@ public class BeiBao {
 	// 潜影盒里的东西也算进去（套娃不管了，一层够用）
 	private static void scanShulker(ItemStack st, JiShu js) {
 		try {
-			Identifier id = BuiltInRegistries.ITEM.getKey(st.getItem());
-			if (id == null || !id.getPath().endsWith("shulker_box")) return;
 			ItemContainerContents box = st.get(DataComponents.CONTAINER);
 			if (box == null) return;
 			box.nonEmptyItemCopyStream().forEach(inner -> {
-				String k = keyOf(inner);
-				if (k != null) js.owned.merge(k, inner.getCount(), Integer::sum);
+				String k = pathOf(inner);
+				if (k != null) js.owned.merge("minecraft:" + k, inner.getCount(), Integer::sum);
 			});
 		} catch (Throwable ignored) {}
 	}

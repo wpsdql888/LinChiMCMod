@@ -120,8 +120,10 @@ public class CaiLiaoBanScreen extends Screen {
 	private int rightHead() { return usesKey != null ? 18 : 0; }
 	private int leftRows() { return Math.max(1, (listBottom - listTop - 2) / ROW); }
 	private int rightRows() { return Math.max(1, (listBottom - listTop - 2 - rightHead()) / ROW); }
-	private int rightListW() { return showRecipe ? third * 2 - RECIPE_W - 24 : third * 2 - 12; }
-	private int recipeX() { return px + third + 8 + rightListW() + 8; }
+	// 配方区宽度自适应：窗口很窄时给右栏留至少 92px，避免 rightListW 变负导致布局翻转。
+	private int recipeW() { return Math.min(RECIPE_W, Math.max(120, third * 2 - 92 - 24)); }
+	private int rightListW() { return showRecipe ? Math.max(92, third * 2 - recipeW() - 24) : third * 2 - 12; }
+	private int recipeX() { return px + pw - recipeW() - 6; }
 	// 底部材料条宽度：配方视图时让到配方面板左边，别叠在一起
 	private int baseBarW() { return showRecipe ? recipeX() - px - 20 : pw - 16; }
 
@@ -266,16 +268,14 @@ public class CaiLiaoBanScreen extends Screen {
 	private void drawRecipe(GuiGraphicsExtractor g, int mx, int my) {
 		WuPin wp = recipeTarget;
 		if (wp == null) return;
-		int rx = recipeX(), rw = RECIPE_W, rh = listBottom - listTop;
+		int rx = recipeX(), rw = recipeW(), rh = listBottom - listTop;
 		GuiTool.panel(g, rx, listTop, rw, rh, 0xF0181820);
 		GuiTool.border(g, rx, listTop, rw, rh, 0xFFF0A500);
 		GuiTool.item(g, wp.base, rx + 8, listTop + 8);
 		GuiTool.text(g, wp.ming, rx + 30, listTop + 10, 0xFFFFD54F);
 		if (!recipeHistory.isEmpty()) GuiTool.text(g, "<-", rx + rw - 30, listTop + 10, 0xFF7FE0FF);
 
-		List<PeiFang> pfs = new ArrayList<>();
-		if (wp.gongFang != null) pfs.add(wp.gongFang);
-		if (wp.moJing != null) pfs.add(wp.moJing);
+		List<PeiFang> pfs = recipesOf(wp);
 		if (pfs.isEmpty()) return;
 		recipePage = Math.max(0, Math.min(recipePage, pfs.size() - 1));
 		PeiFang pf = pfs.get(recipePage);
@@ -390,7 +390,7 @@ public class CaiLiaoBanScreen extends Screen {
 						}
 					}
 				}
-				if (cx >= recipeX() + RECIPE_W - 32 && cy < listTop + 24 && !recipeHistory.isEmpty()) {
+				if (cx >= recipeX() + recipeW() - 32 && cy < listTop + 24 && !recipeHistory.isEmpty()) {
 					recipeTarget = recipeHistory.pop(); recipePage = 0; return true;
 				}
 			}
@@ -398,11 +398,21 @@ public class CaiLiaoBanScreen extends Screen {
 		return super.mouseClicked(e, doubleClick);
 	}
 
+	// 当前目标的配方列表（工作台/魔镜）：按目标缓存，避免每帧 new ArrayList
+	private WuPin pfsTarget;
+	private List<PeiFang> pfsCache;
+	private List<PeiFang> recipesOf(WuPin wp) {
+		if (wp == null) return Collections.emptyList();
+		if (wp == pfsTarget && pfsCache != null) return pfsCache;
+		List<PeiFang> pfs = new ArrayList<>(2);
+		if (wp.gongFang != null) pfs.add(wp.gongFang);
+		if (wp.moJing != null) pfs.add(wp.moJing);
+		pfsTarget = wp; pfsCache = pfs;
+		return pfs;
+	}
+
 	private PeiFang curPf() {
-		if (recipeTarget == null) return null;
-		List<PeiFang> pfs = new ArrayList<>();
-		if (recipeTarget.gongFang != null) pfs.add(recipeTarget.gongFang);
-		if (recipeTarget.moJing != null) pfs.add(recipeTarget.moJing);
+		List<PeiFang> pfs = recipesOf(recipeTarget);
 		return pfs.isEmpty() ? null : pfs.get(Math.max(0, Math.min(recipePage, pfs.size() - 1)));
 	}
 
@@ -411,7 +421,7 @@ public class CaiLiaoBanScreen extends Screen {
 		int dir = dy > 0 ? -1 : 1;
 		if (my >= matY && my < matY + 44 && mx >= px + 6 && mx < px + pw - 8) {
 			matScroll += dir;
-		} else if (showRecipe && mx >= recipeX() && mx < recipeX() + RECIPE_W && my >= listTop && my < listBottom) {
+		} else if (showRecipe && mx >= recipeX() && mx < recipeX() + recipeW() && my >= listTop && my < listBottom) {
 			recipePage += dir; // 多个配方之间来回切
 		} else if (my >= listTop && my < listBottom && mx >= px + 6 && mx < px + third - 6) {
 			leftScroll += dir;

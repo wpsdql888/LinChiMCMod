@@ -40,12 +40,17 @@ public class HudRender {
 		// 扫描背包交给 tick 事件，渲染这里只读缓存 —— 每帧不该有 IO 和重算
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null) return;
-		if (com.dnteam.linchi.gui.GuiTool.hasOpenScreen()) return;
+		// 直接查当前有没有界面，比靠多处手动维护的 screenOpen 布尔可靠：
+		// 后者任何一处忘了 setOpen(false) 都会让 HUD 永久消失。
+		if (JianRong.currentScreen() != null) return;
 		if (ZhuangTai.INS.targets.isEmpty()) return;
 		if (PeiZhi.INS.hudKai) drawCaiLiao(g, mc);
 		if (PeiZhi.INS.zhuGongKai) drawZhuGong(g, mc);
 		if (PeiZhi.INS.hudKai && ZhuangTai.INS.allDone()) drawDone(g, mc);
 	}
+
+	// 布局结果缓冲：HUD 每帧算位置，复用数组避免每帧 new int[4]
+	private static final int[] BOX_L = new int[4], BOX_R = new int[4];
 
 	// 聊天框在左下，热键栏在正下方。算一下材料栏能放哪儿，别压到它们
 	private static int[] placeLeft(Minecraft mc, int rows) {
@@ -61,7 +66,8 @@ public class HudRender {
 		int chatTop = sh - Math.max(0, PeiZhi.INS.hudChatJianJu);
 		if (bottom > chatTop) bottom = chatTop;
 		if (bottom < h + 8) bottom = h + 8;
-		return new int[]{ Math.max(0, x), bottom - h, w, h };
+		BOX_L[0] = Math.max(0, x); BOX_L[1] = bottom - h; BOX_L[2] = w; BOX_L[3] = h;
+		return BOX_L;
 	}
 
 	// 右下同理，热键栏右边也可能顶过来
@@ -76,7 +82,8 @@ public class HudRender {
 		int chatTop = sh - Math.max(0, PeiZhi.INS.hudChatJianJu);
 		if (x < sw / 2 && bottom > chatTop) bottom = chatTop;
 		if (bottom < h + 8) bottom = h + 8;
-		return new int[]{ Math.max(0, x), bottom - h, w, h };
+		BOX_R[0] = Math.max(0, x); BOX_R[1] = bottom - h; BOX_R[2] = w; BOX_R[3] = h;
+		return BOX_R;
 	}
 
 	private static void drawCaiLiao(GuiGraphicsExtractor g, Minecraft mc) {
@@ -115,10 +122,11 @@ public class HudRender {
 	}
 
 	// 完成提示放准星上方，别挡着中间
+	private static final String DONE_MSG = "材料全部收集完毕 可以进行合成";
 	private static void drawDone(GuiGraphicsExtractor g, Minecraft mc) {
 		int sw = mc.getWindow().getGuiScaledWidth();
 		int sh = mc.getWindow().getGuiScaledHeight();
-		String msg = "材料全部收集完毕 可以进行合成";
+		String msg = DONE_MSG;
 		int w = mc.font.width(msg) + 20;
 		int x = (sw - w) / 2, y = sh / 2 - 64 + PeiZhi.INS.hudPianYiY;
 		g.fill(x, y, x + w, y + 22, 0xE0208020);

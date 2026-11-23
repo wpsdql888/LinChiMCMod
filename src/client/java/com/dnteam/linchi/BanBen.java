@@ -39,7 +39,9 @@ public class BanBen {
 	public static void check(Minecraft mc, boolean allowRequest) {
 		Thread t = new Thread(() -> {
 			Cache c = readCache();
-			boolean needNet = c == null || System.currentTimeMillis() - c.at > COOLDOWN;
+			long age = c == null ? Long.MAX_VALUE : System.currentTimeMillis() - c.at;
+			// age<0 说明缓存时间是未来（玩家改过系统时间），一律当作过期重新拉
+			boolean needNet = age > COOLDOWN || age < 0;
 			if (allowRequest && needNet) {
 				String remote = fetch();
 				if (remote != null) {

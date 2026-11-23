@@ -21,9 +21,10 @@ public class GongFangZhiYin {
 	public static int panelX(Screen s) { return s.width / 2 + 96; }
 	public static int panelY(Screen s) { return s.height / 2 - 79 + 4; }
 
-	// 行视图缓存：craftRows 返回的是同一份列表实例，只有重建时才换。
-	// 每帧 subList+拷贝纯属浪费，这里只在数据源或页码变化时重算
-	private static java.util.List<ZhuangTai.BuRow> rowsSrc;
+	// 行视图缓存：只在“数据版本”或页码变化时重算。
+	// 注意 craftRows() 返回的是同一个 ArrayList 实例（重建时 clear+重填），
+	// 比对实例引用永远相等，必须用版本号才能感知数据刷新。
+	private static int rowsVer = -1;
 	private static int rowsPage = -1;
 	private static List<ZhuangTai.BuRow> rowsView = new ArrayList<>();
 
@@ -31,10 +32,11 @@ public class GongFangZhiYin {
 		List<ZhuangTai.BuRow> all = ZhuangTai.INS.craftRows();
 		int maxPage = Math.max(0, (all.size() - 1) / ROWS);
 		if (page > maxPage) page = maxPage;
-		if (rowsSrc == all && rowsPage == page) return rowsView;
+		int ver = ZhuangTai.INS.version();
+		if (rowsVer == ver && rowsPage == page) return rowsView;
 		int from = page * ROWS;
 		rowsView = new ArrayList<>(all.subList(from, Math.min(all.size(), from + ROWS)));
-		rowsSrc = all;
+		rowsVer = ver;
 		rowsPage = page;
 		return rowsView;
 	}

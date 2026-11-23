@@ -13,15 +13,22 @@ import java.util.Map;
 // 每帧要画几十个图标，每次都 new 一个栈太浪费，这里做个常驻缓存
 public class TuBiao {
 	private static final Map<String, ItemStack> CACHE = new HashMap<>();
+	// 原始 key 直接映射结果：命中后连 baseOf 查询、小写化、字符串拼接全省掉。
+	// 渲染一帧要画几十个图标，这一层能砍掉绝大部分重复解析。
+	private static final Map<String, ItemStack> OF_CACHE = new HashMap<>();
 
 	public static ItemStack of(String key) {
 		if (key == null) return ItemStack.EMPTY;
+		String ck = key + "|" + (PeiZhi.INS.fuMoGuang ? 1 : 0);
+		ItemStack hit = OF_CACHE.get(ck);
+		if (hit != null) return hit;
 		String base = ShuJuKu.INS.baseOf(key);
 		// baseOf 只认 "minecraft:xxx" 和魔法物品中文名；
 		// 魔法物品的 base 字段是裸 id（如 "goat_horn"），baseOf 会返回 null，
 		// 这里兜底把 key 本身当原版 id 再试一次，否则列表/HUD 里魔法物品永远没图标
-		if (base == null) return fromBase(key);
-		return fromBase(base);
+		ItemStack st = fromBase(base == null ? key : base);
+		OF_CACHE.put(ck, st);
+		return st;
 	}
 
 	public static ItemStack fromBase(String base) {
@@ -49,5 +56,5 @@ public class TuBiao {
 	}
 
 	// 光效开关变了就把缓存丢掉，不然图标会停留在旧状态
-	public static void clearCache() { CACHE.clear(); }
+	public static void clearCache() { CACHE.clear(); OF_CACHE.clear(); }
 }
