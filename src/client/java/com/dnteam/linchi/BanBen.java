@@ -14,11 +14,11 @@ import java.nio.file.*;
 import java.time.Duration;
 import java.util.regex.*;
 
-// 启动时版本检测：拉 update.json 比版本号，旧了在聊天提示
+// 启动时版本检测：拉 data.json 比版本号，旧了在聊天提示
 // 请求很金贵 —— 结果落盘，24 小时内不再问服务器
 public class BanBen {
 	public static final String LOCAL = "1.1.1";
-	public static final String CHECK_URL = "https://dnteam.top/LinChi/update.json";
+	public static final String CHECK_URL = "https://lins.dnteam.top/LinChi/data.json";
 	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
 	private static final long COOLDOWN = 24L * 60 * 60 * 1000;
 	private static boolean checked = false;
@@ -90,7 +90,7 @@ public class BanBen {
 			String chatMsg;
 			if (remote == null) {
 				shortMsg = "检测失败";
-				chatMsg = "检测失败：无法获取 update.json";
+				chatMsg = "检测失败：无法获取 data.json";
 			} else if (isOlder(LOCAL, remote)) {
 				shortMsg = "发现新版本 v" + remote;
 				chatMsg = "发现新版本 v" + remote + "，当前 v" + LOCAL + "，请前往更新页面";
