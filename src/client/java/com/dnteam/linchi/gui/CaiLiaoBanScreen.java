@@ -47,6 +47,11 @@ public class CaiLiaoBanScreen extends Screen {
 	}
 	private List<MatRow> leftView = new ArrayList<>();
 	private boolean leftDirty = false;
+	// 自己判双击，不信原版传进来的 doubleClick（部分环境/鼠标会把单击也标成双击）
+	private long lastLeftAt, lastRightAt;
+	private String lastLeftKey, lastRightKey;
+	private int lastLeftY;
+	private static final long DBL_MS = 280;
 	private List<WuPin> rightView = Collections.emptyList();
 	private int leftScroll = 0, rightScroll = 0, matScroll = 0;
 	private int lastMx = 0, lastMy = 0;
@@ -355,6 +360,11 @@ public class CaiLiaoBanScreen extends Screen {
 		return b + "..";
 	}
 
+	private boolean isDouble(long now, long last, String key, String lastKey) {
+		if (now < last) return false;
+		return key != null && key.equals(lastKey) && now - last <= DBL_MS;
+	}
+
 	private void drawScrollBar(GuiGraphicsExtractor g, int x, int y, int h, int off, int total, int rows) {
 		int bar = Math.max(12, h * rows / total);
 		int maxOff = Math.max(1, total - rows);
@@ -439,6 +449,26 @@ public class CaiLiaoBanScreen extends Screen {
 	// tooltip 交给原版那套，Jade/REI 之类的挂在上面的模组也照样能出提示
 	private void drawTip(GuiGraphicsExtractor g, int mx, int my) {
 		if (my < listTop || my >= listBottom) return;
+		// 配方面板里的 3×3 也要有名字提示
+		if (showRecipe && gridCell > 0) {
+			int span = gridCell + 3;
+			int gw = span * 3;
+			if (mx >= gridX0 && mx < gridX0 + gw && my >= gridY0 && my < gridY0 + gw) {
+				int col = (mx - gridX0) / span;
+				int row = (my - gridY0) / span;
+				int gx = gridX0 + col * span;
+				int gy = gridY0 + row * span;
+				if (col >= 0 && col < 3 && row >= 0 && row < 3 && mx < gx + gridCell && my < gy + gridCell) {
+					PeiFang pf = curPf();
+					if (pf != null) {
+						List<String> grid = gridOf(pf);
+						String k = grid.get(row * 3 + col);
+						if (k != null) GuiTool.itemTip(g, k, mx, my);
+					}
+				}
+				return;
+			}
+		}
 		if (mx >= px + 6 && mx < px + third - 6) {
 			int row = (my - listTop - 2) / ROW + leftScroll;
 			if (row >= 0 && row < leftView.size()) {
@@ -477,21 +507,46 @@ public class CaiLiaoBanScreen extends Screen {
 			int rowR = (cy - listTop - 2 - rightHead()) / ROW + rightScroll;
 			if (cx >= px + 6 && cx < px + third - 6 && rowL >= 0 && rowL < leftView.size()) {
 				MatRow r = leftView.get(rowL);
+				if (button == 1) {
+					selLeftKey = r.key; selLeft = ShuJuKu.INS.get(r.key);
+					openThirdUses(r.key);
+					return true;
+				}
+				long now = System.currentTimeMillis();
+				// 左栏展开/收起会让行换位置，双击按“同一个纵坐标”认，不按 key
+				boolean dbl = now >= lastLeftAt && lastLeftKey != null
+					&& now - lastLeftAt <= DBL_MS && Math.abs(cy - lastLeftY) <= 8;
+				if (dbl) {
+					selLeftKey = lastLeftKey;
+					selLeft = ShuJuKu.INS.get(lastLeftKey);
+					openThirdRecipe(selLeft, true);
+					lastLeftAt = 0;
+					return true;
+				}
 				selLeftKey = r.key;
 				selLeft = ShuJuKu.INS.get(r.key);
-				int w = third - 12;
-				boolean onToggle = r.craftable && cx >= px + 6 + w - 6 - TOGGLE_W && cx < px + 6 + w - 6;
-				if (button == 0 && onToggle) { toggleNode(r.key); return true; }
-				if (button == 1) { openThirdUses(r.key); return true; }
-				// 单击只选中，双击才展开第三栏
-				if (doubleClick) openThirdRecipe(selLeft, true);
+				lastLeftAt = now; lastLeftKey = r.key; lastLeftY = cy;
+				// 整行都能点，单击就展开/收起；不可合成的只选中
+				if (r.craftable) toggleNode(r.key);
 				return true;
 			}
 			if (cx >= px + third + 6 && cx < px + third + 6 + rightListW() && rowR >= 0 && rowR < rightView.size()) {
 				WuPin wp = rightView.get(rowR);
+				if (button == 1) {
+					selRight = wp;
+					openThirdUses(wp.ming);
+					return true;
+				}
+				long now = System.currentTimeMillis();
+				boolean dbl = isDouble(now, lastRightAt, wp.ming, lastRightKey);
 				selRight = wp;
-				if (button == 1) { openThirdUses(wp.ming); return true; }
-				if (doubleClick) openThirdRecipe(wp, false);
+				if (dbl) {
+					openThirdRecipe(wp, false);
+					lastRightAt = 0;
+					return true;
+				}
+				lastRightAt = now; lastRightKey = wp.ming;
+				// 单击只选中；双击才开配方
 				return true;
 			}
 			// 配方面板里的材料：能展开就往里走一层
@@ -499,7 +554,7 @@ public class CaiLiaoBanScreen extends Screen {
 				PeiFang pf = curPf();
 				if (pf != null) {
 					List<String> grid = gridOf(pf);
-					int span = gridCell + 4;
+					int span = gridCell + 3;
 					for (int i = 0; i < 9; i++) {
 						int gx = gridX0 + (i % 3) * span;
 						int gy = gridY0 + (i / 3) * span;
