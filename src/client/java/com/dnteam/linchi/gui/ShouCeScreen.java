@@ -105,7 +105,7 @@ public class ShouCeScreen extends Screen {
 		{
 			"第 9 页 / 关于",
 			"LinsMagic 材料计算器    1.0.0",
-			"模组内部 id 和仓库名还是 LinChiMCMod / linchi，这是历史名字，不影响使用；游戏里显示的地方已经统一叫 LinsMagic 材料计算器。",
+			"对外模组名和仓库名是 LinChiMCMod，mod id 是 linchi；游戏里显示的名字是 LinsMagic 材料计算器。名字分开是故意的，在启动器里找 LinChiMCMod 就对了。",
 			"模组作者：wpsdql888    信息提供：Lin",
 			"版权：©2026 DNT Group (https://dnteam.top)",
 			"项目地址：https://github.com/wpsdql888/LinChiMCMod",

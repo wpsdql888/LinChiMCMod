@@ -70,7 +70,7 @@ public class BanBen {
 			HttpClient cli = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 			HttpRequest req = HttpRequest.newBuilder(URI.create(CHECK_URL))
 				.timeout(Duration.ofSeconds(6))
-				.header("User-Agent", "LinChiMod/" + LOCAL).GET().build();
+				.header("User-Agent", "LinChiMCMod/" + LOCAL).GET().build();
 			HttpResponse<String> resp = cli.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			if (resp.statusCode() != 200) return null;
 			Matcher m = Pattern.compile("\"version\"\\s*:\\s*\"([^\"]+)\"").matcher(resp.body());

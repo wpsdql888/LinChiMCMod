@@ -2,8 +2,8 @@
 	"schemaVersion": 1,
 	"id": "linchi",
 	"version": "${version}",
-	"name": "LinsMagic 材料计算器",
-	"description": "一款服务于装载有LinsMagic插件的服务器玩家的便携易用方便计算器\n\n©2026 DNT Group(https://dnteam.top)\n模组作者:wpsdql888  信息提供:Lin",
+	"name": "LinChiMCMod",
+	"description": "LinsMagic 材料计算器 —— 一款服务于装载有LinsMagic插件的服务器玩家的便携易用方便计算器\n\n©2026 DNT Group(https://dnteam.top)\n模组作者:wpsdql888  信息提供:Lin",
 	"authors": [
 		"wpsdql888"
 	],
