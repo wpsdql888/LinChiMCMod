@@ -103,7 +103,7 @@ public class HudRender {
 			int ry = y + i * 20;
 			GuiTool.item(g, r.key, x, ry);
 			GuiTool.text(g, shortName(r.key), x + 22, ry + 2, 0xFFFFFFFF);
-			String qe = "缺" + r.que;
+			String qe = String.valueOf(r.que);
 			GuiTool.text(g, qe, x + w - 4 - textWidth(mc, qe), ry + 2, 0xFFFF6666);
 		}
 	}

@@ -14,9 +14,13 @@ LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the
 
 - Material board (press `N`) showing all 2160 magic items with icons and names.
   - Search, add/remove targets, and adjust quantities.
+  - The left panel is a combined target/material list. Craftable intermediates show an
+    `Expand / Collapse` toggle, so you can decide whether to break an item down into its
+    recipe or collect it as a material; the HUD recalculates immediately.
   - Recipe and usage views with JEI-style mouse gestures (left click for recipe,
     right click for usage, scroll to switch recipe types, click an ingredient to expand).
 - Material HUD (bottom left) listing missing base materials.
+  - Each row shows a plain missing count (no minus sign and no prefix).
   - Scans inventory and shulker boxes; refreshes periodically.
   - Completed rows disappear automatically.
 - Crafting guide HUD (bottom right) listing remaining crafting steps.
@@ -46,7 +50,7 @@ background opacity and HUD offsets.
 Minecraft 26.3, 26.2 and 26.1 (Fabric).
 
 Release JARs are named `LinChiMCMod-Fabric-<mod version>-<minecraft version>.jar`,
-for example `LinChiMCMod-Fabric-1.0.0-26.3.jar`.
+for example `LinChiMCMod-Fabric-1.1.0-26.3.jar`.
 
 ## Requirements
 

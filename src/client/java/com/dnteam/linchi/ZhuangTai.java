@@ -8,6 +8,9 @@ public class ZhuangTai {
 	public static final ZhuangTai INS = new ZhuangTai();
 
 	public final List<QiuJie.Target> targets = new ArrayList<>();
+	// 材料板上用户手动展开/收起的东西，重算时带进求解器
+	public final Set<String> zhanKai = new HashSet<>();
+	public final Set<String> shouQi = new HashSet<>();
 	public BeiBao.JiShu jiShu = new BeiBao.JiShu();
 	public QiuJie latest = new QiuJie();
 	public long lastScan = 0;
@@ -28,7 +31,7 @@ public class ZhuangTai {
 	}
 
 	public void recalc() {
-		latest = QiuJie.run(targets);
+		latest = QiuJie.run(targets, zhanKai, shouQi);
 		rebuild();
 	}
 

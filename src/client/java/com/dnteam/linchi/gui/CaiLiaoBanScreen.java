@@ -24,16 +24,29 @@ public class CaiLiaoBanScreen extends Screen {
 	// 行高压到 18，图标 12px。原来 22px 一行 + 16px 图标，GUI 缩放一高就占满半屏
 	private static final int ROW = 18;
 	private static final int RECIPE_W = 210;
+	private static final int TOGGLE_W = 34;
 	// 配方 3×3 的格子尺寸/起点，画和点都用这套，避免两处算错
 	private int gridCell = 34, gridX0, gridY0;
 
 	private final List<QiuJie.Target> added = new ArrayList<>();
 	private WuPin selLeft, selRight;
+	// 左栏当前选中的 key；基础材料是 minecraft:xxx，不一定能查到 WuPin
+	private String selLeftKey;
 
 	// 搜索和滚动，这四样是分开的，互不串台
 	private EditBox searchLeft, searchRight;
 	private String lastLeftQ = "", lastRightQ = "\u0000";
-	private List<QiuJie.Target> leftView = new ArrayList<>();
+	// 左栏现在是“目标 + 可合成中间物 + 基础材料”的总表
+	private static class MatRow {
+		String key;
+		String disp;
+		int need;
+		boolean isTarget;
+		boolean isCraft;
+		boolean craftable;
+	}
+	private List<MatRow> leftView = new ArrayList<>();
+	private boolean leftDirty = false;
 	private List<WuPin> rightView = Collections.emptyList();
 	private int leftScroll = 0, rightScroll = 0, matScroll = 0;
 	private int lastMx = 0, lastMy = 0;
@@ -89,7 +102,7 @@ public class CaiLiaoBanScreen extends Screen {
 				b.setMessage(Component.literal("辅助合成:" + (PeiZhi.INS.zhuGongKai ? "开" : "关"))); })
 			.bounds(px + thirdBtn * 2, topY, thirdBtn - 12, btnH).build());
 
-		searchLeft = new EditBox(Minecraft.getInstance().font, px + 8, searchY, third - 16, searchH, Component.literal("搜索已添加"));
+		searchLeft = new EditBox(Minecraft.getInstance().font, px + 8, searchY, third - 16, searchH, Component.literal("搜索材料"));
 		searchRight = new EditBox(Minecraft.getInstance().font, px + third + 8, searchY, pw - third - 16, searchH, Component.literal("搜索全部物品 (右键清空)"));
 		searchRight.setMaxLength(120);
 		searchLeft.setMaxLength(120);
@@ -129,17 +142,41 @@ public class CaiLiaoBanScreen extends Screen {
 		refreshViews();
 	}
 
-	// 搜索词变了才重算列表，别每帧扫 2160 条
+	// 搜索词变了才重算列表；数据变化用 leftDirty 强制重建左栏
 	private void refreshViews() {
 		String lq = searchLeft == null ? "" : searchLeft.getValue().trim().toLowerCase(Locale.ROOT);
 		String rq = searchRight == null ? "" : searchRight.getValue().trim().toLowerCase(Locale.ROOT);
-		if (lq.equals(lastLeftQ) && rq.equals(lastRightQ)) return;
+		boolean lChanged = !lq.equals(lastLeftQ);
+		boolean rChanged = !rq.equals(lastRightQ);
+		if (!lChanged && !rChanged && !leftDirty) return;
+		if (lChanged) leftScroll = 0;
+		if (rChanged) rightScroll = 0;
 		lastLeftQ = lq; lastRightQ = rq;
+		leftDirty = false;
 
 		leftView = new ArrayList<>();
+		LinkedHashMap<String, MatRow> rows = new LinkedHashMap<>();
 		for (QiuJie.Target t : added) {
-			WuPin wp = ShuJuKu.INS.get(t.ming);
-			if (lq.isEmpty() || (wp != null && wp.mingLower.contains(lq))) leftView.add(t);
+			MatRow r = new MatRow();
+			r.key = t.ming; r.need = t.count; r.isTarget = true;
+			rows.put(t.ming, r);
+		}
+		for (QiuJie.Bu bu : ZhuangTai.INS.latest.crafts.values()) {
+			MatRow r = rows.get(bu.ming);
+			if (r == null) { r = new MatRow(); r.key = bu.ming; rows.put(bu.ming, r); }
+			r.need = bu.need; r.isCraft = true;
+		}
+		for (QiuJie.Cai c : ZhuangTai.INS.latest.base.values()) {
+			MatRow r = rows.get(c.key);
+			if (r == null) { r = new MatRow(); r.key = c.key; rows.put(c.key, r); }
+			if (!r.isCraft) r.need = c.count;
+		}
+		for (MatRow r : rows.values()) {
+			r.disp = TuBiao.mingOf(r.key);
+			WuPin wp = ShuJuKu.INS.get(r.key);
+			r.craftable = wp != null && wp.keHeCheng();
+			String low = r.disp.toLowerCase(Locale.ROOT);
+			if (lq.isEmpty() || low.contains(lq) || r.key.toLowerCase(Locale.ROOT).contains(lq)) leftView.add(r);
 		}
 
 		if (usesKey != null) {
@@ -147,7 +184,6 @@ public class CaiLiaoBanScreen extends Screen {
 		} else {
 			rightView = ShuJuKu.INS.sou(rq);
 		}
-		leftScroll = 0; rightScroll = 0;
 	}
 
 	// 用途视图要在右栏顶端留一行放标题，其余情况列表从 listTop 开始
@@ -180,6 +216,8 @@ public class CaiLiaoBanScreen extends Screen {
 		// 之前这里又单独跑一遍 QiuJie.run()，同一份目标展开两遍，纯属浪费。
 		ZhuangTai.INS.setTargets(ts);
 		curBase = new ArrayList<>(ZhuangTai.INS.latest.base.values());
+		leftDirty = true;
+		refreshViews();
 		clampScroll();
 	}
 
@@ -189,23 +227,23 @@ public class CaiLiaoBanScreen extends Screen {
 		for (QiuJie.Target t : added) if (t.ming.equals(selRight.ming)) { t.count++; found = true; break; }
 		if (!found) added.add(new QiuJie.Target(selRight.ming, 1));
 		selLeft = selRight;
+		selLeftKey = selRight.ming;
 		openRecipe(selRight, false);
 		lastLeftQ = "\u0000";
-		refreshViews();
 		recalc();
 	}
 
 	void removeSel() {
-		if (selLeft == null) return;
-		added.removeIf(t -> t.ming.equals(selLeft.ming));
-		selLeft = null; showRecipe = false; recipeHistory.clear();
+		if (selLeftKey == null) return;
+		added.removeIf(t -> t.ming.equals(selLeftKey));
+		selLeft = null; selLeftKey = null; showRecipe = false; recipeHistory.clear();
 		lastLeftQ = "\u0000";
-		refreshViews(); recalc();
+		recalc();
 	}
 
 	void qtySel(int d) {
-		if (selLeft == null) return;
-		for (QiuJie.Target t : added) if (t.ming.equals(selLeft.ming)) { t.count = Math.max(1, t.count + d); break; }
+		if (selLeftKey == null) return;
+		for (QiuJie.Target t : added) if (t.ming.equals(selLeftKey)) { t.count = Math.max(1, t.count + d); break; }
 		recalc();
 	}
 
@@ -259,13 +297,20 @@ public class CaiLiaoBanScreen extends Screen {
 		GuiTool.panel(g, px + 6, listTop, w, listBottom - listTop, 0x40181828);
 		int shown = 0;
 		for (int i = leftScroll; i < leftView.size() && shown < leftRows(); i++, shown++) {
-			QiuJie.Target t = leftView.get(i);
+			MatRow r = leftView.get(i);
 			int y = listTop + 2 + shown * ROW;
-			boolean sel = selLeft != null && selLeft.ming.equals(t.ming);
+			boolean sel = r.key.equals(selLeftKey);
 			boolean hov = GuiTool.hovered(mx, my, px + 7, y - 2, w - 2, ROW);
 			if (sel || hov) GuiTool.panel(g, px + 7, y - 2, w - 2, ROW, sel ? 0x50606099 : 0x28384070);
-			GuiTool.item(g, t.ming, px + 10, y, 12);
-			GuiTool.text(g, t.ming + " x" + t.count, px + 26, y + 3, sel ? 0xFFFFFFFF : 0xFFDDDDDD);
+			GuiTool.item(g, r.key, px + 10, y, 12);
+			int color = sel ? 0xFFFFFFFF : (r.isTarget ? 0xFFFFD54F : (r.isCraft ? 0xFF9AD0FF : 0xFFDDDDDD));
+			int rightPad = r.craftable ? TOGGLE_W : 0;
+			GuiTool.text(g, cut(r.disp + " x" + r.need, Math.max(24, w - 30 - rightPad)), px + 26, y + 3, color);
+			if (r.craftable) {
+				String act = r.isCraft ? "收起" : "展开";
+				int tw = Minecraft.getInstance().font.width(act);
+				GuiTool.text(g, act, px + 6 + w - 6 - tw, y + 3, r.isCraft ? 0xFF7FE0FF : 0xFFFFD54F);
+			}
 		}
 		if (leftView.size() > leftRows()) drawScrollBar(g, px + 6 + w - 4, listTop, listBottom - listTop, leftScroll, leftView.size(), leftRows());
 	}
@@ -397,7 +442,7 @@ public class CaiLiaoBanScreen extends Screen {
 		if (mx >= px + 6 && mx < px + third - 6) {
 			int row = (my - listTop - 2) / ROW + leftScroll;
 			if (row >= 0 && row < leftView.size()) {
-				GuiTool.itemTip(g, leftView.get(row).ming, mx, my);
+				GuiTool.itemTip(g, leftView.get(row).key, mx, my);
 			}
 		} else if (mx >= px + third + 6 && mx < px + third + 6 + rightListW()) {
 			int row = (my - listTop - 2 - rightHead()) / ROW + rightScroll;
@@ -431,9 +476,13 @@ public class CaiLiaoBanScreen extends Screen {
 			int rowL = (cy - listTop - 2) / ROW + leftScroll;
 			int rowR = (cy - listTop - 2 - rightHead()) / ROW + rightScroll;
 			if (cx >= px + 6 && cx < px + third - 6 && rowL >= 0 && rowL < leftView.size()) {
-				QiuJie.Target t = leftView.get(rowL);
-				selLeft = ShuJuKu.INS.get(t.ming);
-				if (button == 1) { openThirdUses(t.ming); return true; }
+				MatRow r = leftView.get(rowL);
+				selLeftKey = r.key;
+				selLeft = ShuJuKu.INS.get(r.key);
+				int w = third - 12;
+				boolean onToggle = r.craftable && cx >= px + 6 + w - 6 - TOGGLE_W && cx < px + 6 + w - 6;
+				if (button == 0 && onToggle) { toggleNode(r.key); return true; }
+				if (button == 1) { openThirdUses(r.key); return true; }
 				// 单击只选中，双击才展开第三栏
 				if (doubleClick) openThirdRecipe(selLeft, true);
 				return true;
@@ -489,6 +538,27 @@ public class CaiLiaoBanScreen extends Screen {
 		if (key == null) return;
 		if (ShuJuKu.INS.getUses(key).isEmpty()) return;
 		openUses(key);
+	}
+
+	// 点“展开/收起”：决定这个东西继续拆配方，还是当成材料去收集
+	private void toggleNode(String key) {
+		if (ZhuangTai.INS.zhanKai.contains(key)) {
+			ZhuangTai.INS.zhanKai.remove(key);
+			ZhuangTai.INS.shouQi.add(key);
+		} else if (ZhuangTai.INS.shouQi.contains(key)) {
+			ZhuangTai.INS.shouQi.remove(key);
+			ZhuangTai.INS.zhanKai.add(key);
+		} else if (ZhuangTai.INS.latest.crafts.containsKey(key)) {
+			ZhuangTai.INS.shouQi.add(key);
+		} else {
+			ZhuangTai.INS.zhanKai.add(key);
+		}
+		// 重算后 HUD 的材料/步骤缓存一起刷新
+		ZhuangTai.INS.recalc();
+		curBase = new ArrayList<>(ZhuangTai.INS.latest.base.values());
+		leftDirty = true;
+		refreshViews();
+		clampScroll();
 	}
 
 	// 当前目标的配方列表（工作台/魔镜）：按目标缓存，避免每帧 new ArrayList

@@ -23,9 +23,18 @@ public class QiuJie {
 	public final List<String> notes = new ArrayList<>();
 	private final LinkedHashMap<String, Integer> needTotal = new LinkedHashMap<>();
 	private final Set<String> stack = new HashSet<>();
+	// 用户手动展开/收起：forceKai 强制展开，forceShou 强制当材料
+	private Set<String> forceKai = Collections.emptySet();
+	private Set<String> forceShou = Collections.emptySet();
 
 	public static QiuJie run(List<Target> targets) {
+		return run(targets, Collections.emptySet(), Collections.emptySet());
+	}
+
+	public static QiuJie run(List<Target> targets, Set<String> kai, Set<String> shou) {
 		QiuJie q = new QiuJie();
+		q.forceKai = kai == null ? Collections.emptySet() : kai;
+		q.forceShou = shou == null ? Collections.emptySet() : shou;
 		for (Target t : targets) q.expand(t.ming, t.count);
 		q.sortLevel();
 		return q;
@@ -50,8 +59,11 @@ public class QiuJie {
 
 	private void expand(String key, int need) {
 		WuPin it = ShuJuKu.INS.get(key);
+		// 用户把它当材料，就不再往里拆
+		if (forceShou.contains(key)) { addBase(key, need); return; }
 		if (it == null || !it.keHeCheng()) { addBase(key, need); return; }
-		if (directGain(it)) { addBase(key, need); return; }
+		// 默认按获取途径判断；用户手动点“展开”时跳过这个判断
+		if (!forceKai.contains(key) && directGain(it)) { addBase(key, need); return; }
 		if (stack.contains(key)) {
 			if (!notes.contains(key)) notes.add(key);
 			addBase(key, need);

@@ -17,7 +17,7 @@ import java.util.regex.*;
 // 启动时版本检测：拉 update.json 比版本号，旧了在聊天提示
 // 请求很金贵 —— 结果落盘，24 小时内不再问服务器
 public class BanBen {
-	public static final String LOCAL = "1.0.0";
+	public static final String LOCAL = "1.1.0";
 	public static final String CHECK_URL = "https://dnteam.top/LinChi/update.json";
 	public static final String UPDATE_PAGE = "https://lins.dnteam.top/mods/update.html";
 	private static final long COOLDOWN = 24L * 60 * 60 * 1000;
