@@ -51,7 +51,7 @@ public class CaiLiaoBanScreen extends Screen {
 	private long lastLeftAt, lastRightAt;
 	private String lastLeftKey, lastRightKey;
 	private int lastLeftY;
-	private static final long DBL_MS = 280;
+	private static final long DBL_MS = 250;
 	private List<WuPin> rightView = Collections.emptyList();
 	private int leftScroll = 0, rightScroll = 0, matScroll = 0;
 	private int lastMx = 0, lastMy = 0;
@@ -486,6 +486,20 @@ public class CaiLiaoBanScreen extends Screen {
 	public boolean mouseClicked(MouseButtonEvent e, boolean doubleClick) {
 		int cx = (int) e.x(), cy = (int) e.y();
 		int button = e.button();
+		// 双击只认“同一个列表里连续两次点同一个东西”。
+		// 点到别处、点到另一个列表，或者点空行，都把计时清掉，避免全屏累计。
+		boolean inLeftList = cy >= listTop && cy < listBottom && cx >= px + 6 && cx < px + third - 6;
+		boolean inRightList = cy >= listTop && cy < listBottom && cx >= px + third + 6 && cx < px + third + 6 + rightListW();
+		if (!inLeftList) lastLeftAt = 0;
+		if (!inRightList) lastRightAt = 0;
+		if (inLeftList) {
+			int row = (cy - listTop - 2) / ROW + leftScroll;
+			if (row < 0 || row >= leftView.size()) lastLeftAt = 0;
+		}
+		if (inRightList) {
+			int row = (cy - listTop - 2 - rightHead()) / ROW + rightScroll;
+			if (row < 0 || row >= rightView.size()) lastRightAt = 0;
+		}
 		// 点到搜索框：先显式把容器焦点交过去，再走原版分发。
 		// 有输入法/别的模组改动焦点链时，不主动这一步可能点了也 focus 不上（表现：光标在框里却打不了字）
 		if (GuiTool.hovered(cx, cy, px + 8, searchY, third - 16, searchH)) this.setFocused(searchLeft);
@@ -507,8 +521,12 @@ public class CaiLiaoBanScreen extends Screen {
 			int rowR = (cy - listTop - 2 - rightHead()) / ROW + rightScroll;
 			if (cx >= px + 6 && cx < px + third - 6 && rowL >= 0 && rowL < leftView.size()) {
 				MatRow r = leftView.get(rowL);
+				int w = third - 12;
+				boolean onToggleText = r.craftable && cx >= px + 6 + w - 6 - TOGGLE_W && cx < px + 6 + w - 6;
 				if (button == 1) {
 					selLeftKey = r.key; selLeft = ShuJuKu.INS.get(r.key);
+					// 右键点“展开/收起”只切换状态，别弹用途
+					if (onToggleText) { toggleNode(r.key); return true; }
 					openThirdUses(r.key);
 					return true;
 				}

@@ -17,9 +17,9 @@ import java.util.regex.*;
 // 启动时版本检测：拉 update.json 比版本号，旧了在聊天提示
 // 请求很金贵 —— 结果落盘，24 小时内不再问服务器
 public class BanBen {
-	public static final String LOCAL = "1.1.0";
+	public static final String LOCAL = "1.1.1";
 	public static final String CHECK_URL = "https://dnteam.top/LinChi/update.json";
-	public static final String UPDATE_PAGE = "https://lins.dnteam.top/mods/update.html";
+	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
 	private static final long COOLDOWN = 24L * 60 * 60 * 1000;
 	private static boolean checked = false;
 
@@ -82,9 +82,33 @@ public class BanBen {
 		}
 	}
 
-	private static class Cache { final long at; final String version; Cache(long a, String v) { at = a; version = v; } }
+	// 手动检测：每次都联网，不走 24h 缓存；结果同时回给界面和聊天栏
+	public static void manualCheck(Minecraft mc, java.util.function.Consumer<String> cb) {
+		Thread t = new Thread(() -> {
+			String remote = fetch();
+			String shortMsg;
+			String chatMsg;
+			if (remote == null) {
+				shortMsg = "检测失败";
+				chatMsg = "检测失败：无法获取 update.json";
+			} else if (isOlder(LOCAL, remote)) {
+				shortMsg = "发现新版本 v" + remote;
+				chatMsg = "发现新版本 v" + remote + "，当前 v" + LOCAL + "，请前往更新页面";
+			} else {
+				shortMsg = "已是最新版 v" + LOCAL;
+				chatMsg = "当前已是最新版本 v" + LOCAL;
+			}
+			String s = shortMsg, c = chatMsg;
+			mc.execute(() -> {
+				cb.accept(s);
+				if (mc.player != null) mc.player.sendSystemMessage(Component.literal("[LinChiMCMod] " + c));
+			});
+		}, "linchi-manual-check");
+		t.setDaemon(true);
+		t.start();
+	}
 
-	private static Cache readCache() {
+	private static class Cache { final long at; final String version; Cache(long a, String v) { at = a; version = v; } }	private static Cache readCache() {
 		try {
 			Path p = cacheFile();
 			if (!Files.exists(p)) return null;

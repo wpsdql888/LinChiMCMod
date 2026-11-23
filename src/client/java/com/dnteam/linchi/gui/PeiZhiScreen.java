@@ -1,5 +1,6 @@
 package com.dnteam.linchi.gui;
 
+import com.dnteam.linchi.BanBen;
 import com.dnteam.linchi.PeiZhi;
 import com.dnteam.linchi.TuBiao;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -14,6 +15,7 @@ import net.minecraft.network.chat.Component;
 public class PeiZhiScreen extends Screen {
 	private final Screen parent;
 	private int rowY0, rowGap, colW, btnY;
+	private String updateMsg = "";
 
 	public PeiZhiScreen(Screen parent) {
 		super(Component.literal("LinsMagic 配置"));
@@ -41,6 +43,12 @@ public class PeiZhiScreen extends Screen {
 		addToggle(lx, rowY0 + rowGap * 3, "图标附魔光效", () -> PeiZhi.INS.fuMoGuang, v -> {
 			PeiZhi.INS.fuMoGuang = v; TuBiao.clearCache();
 		}, colW);
+
+		// 手动检测：每次点都联网，不看 24h 缓存
+		addRenderableWidget(Button.builder(Component.literal("检测更新"), b -> {
+			updateMsg = "检测中...";
+			BanBen.manualCheck(Minecraft.getInstance(), msg -> updateMsg = msg);
+		}).bounds(lx, rowY0 + rowGap * 4, colW, 20).build());
 
 		addNum(rx, rowY0, "HUD行数", () -> PeiZhi.INS.hudHangShu, v -> PeiZhi.INS.hudHangShu = clamp(v, 1, 12), colW);
 		addNum(rx, rowY0 + rowGap, "合成步数", () -> PeiZhi.INS.zhongJianJu, v -> PeiZhi.INS.zhongJianJu = clamp(v, 1, 12), colW);
@@ -96,13 +104,20 @@ public class PeiZhiScreen extends Screen {
 		// 不要调用 extractBackground()：父类流程已调用，重复会触发 "Can only blur once per frame" 崩溃
 		GuiTool.panel(g, 0, 0, this.width, this.height, 0xCC101018);
 		GuiTool.modIcon(g, 16, 12, 40);
-		GuiTool.text(g, "LinsMagic 材料计算器 - 配置", 64, 16, 0xFFFFFFFF);
+		String title = "LinsMagic 材料计算器 - 配置";
+		GuiTool.text(g, title, 64, 16, 0xFFFFFFFF);
+		GuiTool.text(g, "v" + BanBen.LOCAL, 64 + Minecraft.getInstance().font.width(title) + 10, 16, 0xFF888888);
 		GuiTool.text(g, "©2026 DNT Group (https://dnteam.top)", 64, 34, 0xFFAAAAAA);
 		GuiTool.text(g, "一款服务于装载有LinsMagic插件的服务器玩家的便携易用方便计算器", 64, 50, 0xFF9AD0FF);
 		GuiTool.text(g, "鸣谢", this.width / 2 - 100, 66, 0xFFFFD54F);
 		GuiTool.text(g, "模组作者: wpsdql888    信息提供: Lin", this.width / 2 - 140, 78, 0xFFDDDDDD);
 		GuiTool.text(g, "Github: github.com/wpsdql888/LinChiMCMod", this.width / 2 - 140, 90, 0xFF9AD0FF);
 		super.extractRenderState(g, mx, my, delta);
+		int lx = this.width / 2 - 6 - colW;
+		int msgY = rowY0 + rowGap * 4 + 24;
+		if (!updateMsg.isEmpty() && msgY + 9 <= btnY - 14) {
+			GuiTool.text(g, updateMsg, lx, msgY, 0xFF9AD0FF);
+		}
 		// 屏幕太矮时这行会压到最后一行数值上，宁可不画
 		if (rowY0 + rowGap * 6 + 20 <= btnY - 14) {
 			GuiTool.text(g, "ESC / CTRL+P 关闭    数值点 < > 调整，热键在原版控制设置里改", 8, btnY - 14, 0xFF888888);

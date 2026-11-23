@@ -30,6 +30,8 @@ LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the
   shortly after crafting. Materials are matched by display name; missing materials are skipped
   silently, and shulker-box contents are not used for filling.
 - In-game manual, shown once on first launch and always available from the config panel.
+- The config panel shows the current mod version and includes a manual "Check updates"
+  button that always performs a fresh network check and reports the result in the panel and chat.
 - Optional update check (multiplayer only, cached for 24 hours).
 
 ## Keybindings
@@ -50,7 +52,7 @@ background opacity and HUD offsets.
 Minecraft 26.3, 26.2 and 26.1 (Fabric).
 
 Release JARs are named `LinChiMCMod-Fabric-<mod version>-<minecraft version>.jar`,
-for example `LinChiMCMod-Fabric-1.1.0-26.3.jar`.
+for example `LinChiMCMod-Fabric-1.1.1-26.3.jar`.
 
 ## Requirements
 
