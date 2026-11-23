@@ -144,7 +144,8 @@ public class ShouCeScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
-		this.extractBackground(g, mx, my, delta);
+		// 不要在这里调用 extractBackground()：26.x 的 Screen.extractRenderStateWithTooltipAndSubtitles
+		// 已经先调用过一次，重复调用会在同一帧触发两次背景模糊，抛 "Can only blur once per frame" 崩溃。
 		GuiTool.panel(g, 0, 0, this.width, this.height, 0xDD0A0C14);
 
 		int panelW = Math.min(this.width - 100, 760);

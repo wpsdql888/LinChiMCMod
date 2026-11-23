@@ -185,7 +185,7 @@ public class CaiLiaoBanScreen extends Screen {
 		lastMx = mx; lastMy = my;
 		refreshViews();
 		clampScroll();
-		this.extractBackground(g, mx, my, delta);
+		// 不要调用 extractBackground()：父类流程已调用，重复会触发 "Can only blur once per frame" 崩溃
 		GuiTool.panel(g, px, py, pw, ph, 0xF0101014);
 		GuiTool.border(g, px, py, pw, ph, 0xFF7B6EF6);
 

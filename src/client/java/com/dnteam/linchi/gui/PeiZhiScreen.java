@@ -81,7 +81,7 @@ public class PeiZhiScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
-		this.extractBackground(g, mx, my, delta);
+		// 不要调用 extractBackground()：父类流程已调用，重复会触发 "Can only blur once per frame" 崩溃
 		GuiTool.panel(g, 0, 0, this.width, this.height, 0xCC101018);
 		GuiTool.modIcon(g, 16, 14, 48);
 		GuiTool.text(g, "LinChi 材料计算器 - 配置", 76, 18, 0xFFFFFFFF);
