@@ -45,6 +45,9 @@ background opacity and HUD offsets.
 
 Minecraft 26.3, 26.2 and 26.1 (Fabric).
 
+Release JARs are named `LinChiMCMod-Fabric-<mod version>-<minecraft version>.jar`,
+for example `LinChiMCMod-Fabric-1.0.0-26.3.jar`.
+
 ## Requirements
 
 - Fabric Loader
