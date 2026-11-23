@@ -12,25 +12,62 @@ import java.net.http.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Duration;
-import java.util.regex.*;
 
-// 启动时版本检测：拉 data.json 比版本号，旧了在聊天提示
-// 请求很金贵 —— 结果落盘，24 小时内不再问服务器
+// 启动时检测模组和数据库版本。结果落盘，24 小时内不再问服务器
 public class BanBen {
 	public static final String LOCAL = "1.1.1";
 	public static final String CHECK_URL = "https://lins.dnteam.top/LinChi/data.json";
 	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
 	private static final long COOLDOWN = 24L * 60 * 60 * 1000;
 	private static boolean checked = false;
+	private static boolean dbChecked = false;
+
+	// 从 data.json 读出来的东西。db 相关字段没有就留 null
+	public static class Remote {
+		public final String version;
+		public final String dbVersion;
+		public final String dbUrl;
+
+		public Remote(String version, String dbVersion, String dbUrl) {
+			this.version = version;
+			this.dbVersion = dbVersion;
+			this.dbUrl = dbUrl;
+		}
+	}
 
 	public static void register() {
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+			// 数据库检查进主菜单就跑，不必等进世界
+			if (!dbChecked) {
+				dbChecked = true;
+				if (PeiZhi.INS.ziDongGengXinShuJu) checkData(mc);
+			}
 			if (checked || mc.player == null || mc.level == null) return;
-			if (mc.getCurrentServer() == null) return; // 单人世界不检测
-			if (!PeiZhi.INS.jianCeBanBen) { checked = true; return; }
+			if (!PeiZhi.INS.jianCeBanBen && !PeiZhi.INS.ziDongGengXinShuJu) { checked = true; return; }
 			checked = true;
 			check(mc, true);
 		});
+	}
+
+	// 只查数据库，主菜单也能跑；模组版本通知仍然等进世界
+	public static void checkData(Minecraft mc) {
+		Thread t = new Thread(() -> {
+			Cache c = readCache();
+			long age = c == null ? Long.MAX_VALUE : System.currentTimeMillis() - c.at;
+			boolean needNet = age > COOLDOWN || age < 0
+				|| (c != null && c.remote.dbVersion == null);
+			if (needNet) {
+				Remote r = fetch();
+				if (r != null) {
+					writeCache(System.currentTimeMillis(), r);
+					c = new Cache(System.currentTimeMillis(), r);
+				}
+			}
+			if (c != null && c.remote != null && c.remote.dbVersion != null)
+				ShuJuGengXin.apply(mc, c.remote);
+		}, "linchi-db-check");
+		t.setDaemon(true);
+		t.start();
 	}
 
 	private static Path cacheFile() { return Paths.get("config", "linchi_update.json"); }
@@ -41,62 +78,82 @@ public class BanBen {
 			Cache c = readCache();
 			long age = c == null ? Long.MAX_VALUE : System.currentTimeMillis() - c.at;
 			// age<0 说明缓存时间是未来（玩家改过系统时间），一律当作过期重新拉
-			boolean needNet = age > COOLDOWN || age < 0;
+			// 老版本缓存里没有 dbVersion，开了数据库更新就强制刷一次
+			boolean needNet = age > COOLDOWN || age < 0
+				|| (PeiZhi.INS.ziDongGengXinShuJu && c != null && c.remote.dbVersion == null);
 			if (allowRequest && needNet) {
-				String remote = fetch();
+				Remote remote = fetch();
 				if (remote != null) {
 					writeCache(System.currentTimeMillis(), remote);
 					c = new Cache(System.currentTimeMillis(), remote);
 				}
 			}
-			if (c == null || c.version == null || !isOlder(LOCAL, c.version)) return;
-			String v = c.version;
-			mc.execute(() -> {
-				if (mc.player == null) return;
-				Component link = Component.literal("点击此处")
-					.withStyle(Style.EMPTY.withClickEvent(new ClickEvent.OpenUrl(URI.create(UPDATE_PAGE)))
-						.withUnderlined(true));
-				Component msg = Component.literal("[LinsMagic]有新版本v" + v + "可供使用，")
-					.append(link).append("查看更新方式");
-				mc.player.sendSystemMessage(msg);
-			});
+			if (c == null || c.remote == null) return;
+			Remote r = c.remote;
+			if (PeiZhi.INS.jianCeBanBen && mc.getCurrentServer() != null
+				&& r.version != null && isOlder(LOCAL, r.version)) {
+				String v = r.version;
+				mc.execute(() -> {
+					if (mc.player == null) return;
+					Component link = Component.literal("点击此处")
+						.withStyle(Style.EMPTY.withClickEvent(new ClickEvent.OpenUrl(URI.create(UPDATE_PAGE)))
+							.withUnderlined(true));
+					Component msg = Component.literal("[LinsMagic]有新版本v" + v + "可供使用，")
+						.append(link).append("查看更新方式");
+					mc.player.sendSystemMessage(msg);
+				});
+			}
+			// 数据库更新不受多人游戏限制，单人存档也照常检查
+			if (PeiZhi.INS.ziDongGengXinShuJu && r.dbVersion != null) {
+				ShuJuGengXin.apply(mc, r);
+			}
 		}, "linchi-update-check");
 		t.setDaemon(true);
 		t.start();
 	}
 
-	private static String fetch() {
+	private static Remote fetch() {
 		try {
-			HttpClient cli = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+			HttpClient cli = HttpClient.newBuilder()
+				.connectTimeout(Duration.ofSeconds(5))
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.build();
 			HttpRequest req = HttpRequest.newBuilder(URI.create(CHECK_URL))
-				.timeout(Duration.ofSeconds(6))
+				.timeout(Duration.ofSeconds(10))
 				.header("User-Agent", "LinChiMCMod/" + LOCAL).GET().build();
 			HttpResponse<String> resp = cli.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			if (resp.statusCode() != 200) return null;
-			Matcher m = Pattern.compile("\"version\"\\s*:\\s*\"([^\"]+)\"").matcher(resp.body());
-			if (!m.find()) return null;
-			return m.group(1).replace("v", "").trim();
+			JsonObject o = JsonParser.parseString(ShuJuKu.stripBom(resp.body())).getAsJsonObject();
+			String v = opt(o, "version");
+			if (v == null) return null;
+			String db = opt(o, "dbVersion");
+			if (db == null) db = opt(o, "databaseVersion");
+			String url = opt(o, "dbUrl");
+			if (url == null) url = opt(o, "databaseUrl");
+			return new Remote(clean(v), db == null ? null : clean(db), url);
 		} catch (Exception e) {
 			LinChiMod.LOG.debug("版本检测跳过: {}", e.getMessage());
 			return null;
 		}
 	}
 
-	// 手动检测：每次都联网，不走 24h 缓存；结果同时回给界面和聊天栏
+	// 手动检测：模组和数据库都查，每次都联网，不走 24h 缓存
 	public static void manualCheck(Minecraft mc, java.util.function.Consumer<String> cb) {
 		Thread t = new Thread(() -> {
-			String remote = fetch();
+			Remote r = fetch();
 			String shortMsg;
 			String chatMsg;
-			if (remote == null) {
-				shortMsg = "检测失败";
+			if (r == null) {
+				shortMsg = "模组检测失败\n数据库检测失败";
 				chatMsg = "检测失败：无法获取 data.json";
-			} else if (isOlder(LOCAL, remote)) {
-				shortMsg = "发现新版本 v" + remote;
-				chatMsg = "发现新版本 v" + remote + "，当前 v" + LOCAL + "，请前往更新页面";
 			} else {
-				shortMsg = "已是最新版 v" + LOCAL;
-				chatMsg = "当前已是最新版本 v" + LOCAL;
+				String mod;
+				if (r.version == null) mod = "模组版本未知";
+				else if (isOlder(LOCAL, r.version)) mod = "模组有新版本 v" + r.version;
+				else mod = "模组已是最新版 v" + LOCAL;
+				String db = r.dbVersion == null ? "数据库版本未提供" : ShuJuGengXin.apply(mc, r);
+				shortMsg = mod + "\n" + db;
+				chatMsg = mod + "；" + db;
 			}
 			String s = shortMsg, c = chatMsg;
 			mc.execute(() -> {
@@ -108,22 +165,47 @@ public class BanBen {
 		t.start();
 	}
 
-	private static class Cache { final long at; final String version; Cache(long a, String v) { at = a; version = v; } }	private static Cache readCache() {
+	static String opt(JsonObject o, String k) {
+		return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : null;
+	}
+
+	private static String clean(String v) {
+		return v == null ? null : v.replace("v", "").trim();
+	}
+
+	private static class Cache {
+		final long at;
+		final Remote remote;
+
+		Cache(long at, Remote remote) {
+			this.at = at;
+			this.remote = remote;
+		}
+	}
+
+	private static Cache readCache() {
 		try {
 			Path p = cacheFile();
 			if (!Files.exists(p)) return null;
-			JsonObject o = JsonParser.parseString(new String(Files.readAllBytes(p), StandardCharsets.UTF_8)).getAsJsonObject();
-			return new Cache(o.get("at").getAsLong(), o.has("version") && !o.get("version").isJsonNull() ? o.get("version").getAsString() : null);
-		} catch (Exception e) { return null; }
+			JsonObject o = JsonParser.parseString(ShuJuKu.stripBom(new String(Files.readAllBytes(p), StandardCharsets.UTF_8))).getAsJsonObject();
+			String v = opt(o, "version");
+			if (v == null) return null;
+			return new Cache(o.get("at").getAsLong(),
+				new Remote(v, opt(o, "dbVersion"), opt(o, "dbUrl")));
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
-	private static void writeCache(long at, String version) {
+	private static void writeCache(long at, Remote r) {
 		try {
 			Path p = cacheFile();
 			Files.createDirectories(p.getParent());
 			JsonObject o = new JsonObject();
 			o.addProperty("at", at);
-			o.addProperty("version", version);
+			o.addProperty("version", r.version);
+			if (r.dbVersion != null) o.addProperty("dbVersion", r.dbVersion);
+			if (r.dbUrl != null) o.addProperty("dbUrl", r.dbUrl);
 			Files.write(p, o.toString().getBytes(StandardCharsets.UTF_8));
 		} catch (Exception e) {
 			LinChiMod.LOG.debug("版本缓存写不进去: {}", e.getMessage());

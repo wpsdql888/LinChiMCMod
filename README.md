@@ -8,7 +8,7 @@ Copyright 2026 DNT Group (https://dnteam.top)
 
 ## Overview
 
-LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the base materials needed for magic items, follow crafting steps, and fill crafting tables automatically. It is a client-side Fabric mod with no server-side installation required. Data is bundled inside the mod; no external data download is needed.
+LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the base materials needed for magic items, follow crafting steps, and fill crafting tables automatically. It is a client-side Fabric mod with no server-side installation required. The mod bundles a default item database and can update it over the air (OTA) on startup.
 
 ## Features
 
@@ -31,8 +31,14 @@ LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the
   silently, and shulker-box contents are not used for filling.
 - In-game manual, shown once on first launch and always available from the config panel.
 - The config panel shows the current mod version and includes a manual "Check updates"
-  button that always performs a fresh network check and reports the result in the panel and chat.
-- Optional update check (multiplayer only, cached for 24 hours).
+  button that checks both the mod version and the item database version, then reports the result
+  in the panel and chat.
+- OTA item database: the server update JSON (`data.json`) carries `dbVersion` and an optional
+  `dbUrl`. On first join after launch the client compares the local database version and file
+  integrity, then downloads the latest database when needed. The local version is stored in
+  `config/linchi_data_version.json` (starts at `1.0.0`), and the downloaded data goes to
+  `config/linchi_data.json`. The automatic update can be disabled in the config panel.
+- Optional mod update check (multiplayer only, cached for 24 hours).
 
 ## Keybindings
 
@@ -44,8 +50,8 @@ Both keybindings can be changed in Minecraft Options -> Controls -> "LinsMagic �
 ## Configuration
 
 Settings are saved to `config/linchi.json`. The config panel offers toggles for the two HUDs,
-update checking and item glow, plus sliders for HUD rows, step count, refresh interval,
-background opacity and HUD offsets.
+mod update checking, item glow and automatic database updates, plus sliders for HUD rows,
+step count, refresh interval, background opacity and HUD offsets.
 
 ## Supported versions
 

@@ -17,6 +17,8 @@ public class LinChiClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		// 首次安装先建数据库版本文件，默认 1.0.0
+		ShuJuGengXin.init();
 		// 用 InputConstants 常量而不是硬编码 80/78：MC 26.3 的键码编号与 26.1/26.2
 		// 不同（KEY_P 从 80 变成 19）。写死数字会让 26.3 的默认绑定与下面的
 		// KEY_P 判断对不上，导致 CTRL+P 退化成单按 P 就能打开面板。

@@ -12,6 +12,7 @@ public class PeiZhi {
 	public boolean hudKai = false;        // 材料信息 HUD
 	public boolean zhuGongKai = false;    // 辅助合成
 	public boolean jianCeBanBen = true;   // 版本检测开关
+	public boolean ziDongGengXinShuJu = true; // 数据库自动更新开关
 	public int hudHangShu = 6;            // HUD 最多显示几行
 	public int hudZaiSheng = 3;           // HUD 距屏幕左边 (百分比粗略值)
 	public int zhongJianJu = 6;           // 辅助合成最多显示几步
@@ -38,6 +39,7 @@ public class PeiZhi {
 			hudKai = bool(o, "hudKai", hudKai);
 			zhuGongKai = bool(o, "zhuGongKai", zhuGongKai);
 			jianCeBanBen = bool(o, "jianCeBanBen", jianCeBanBen);
+			ziDongGengXinShuJu = bool(o, "ziDongGengXinShuJu", ziDongGengXinShuJu);
 			hudHangShu = num(o, "hudHangShu", hudHangShu);
 			hudZaiSheng = num(o, "hudZaiSheng", hudZaiSheng);
 			zhongJianJu = num(o, "zhongJianJu", zhongJianJu);
@@ -61,6 +63,7 @@ public class PeiZhi {
 			o.addProperty("hudKai", hudKai);
 			o.addProperty("zhuGongKai", zhuGongKai);
 			o.addProperty("jianCeBanBen", jianCeBanBen);
+			o.addProperty("ziDongGengXinShuJu", ziDongGengXinShuJu);
 			o.addProperty("hudHangShu", hudHangShu);
 			o.addProperty("hudZaiSheng", hudZaiSheng);
 			o.addProperty("zhongJianJu", zhongJianJu);

@@ -10,6 +10,7 @@ public class WuPin {
 	public String huoQu;     // 获取途径文字
 	public PeiFang gongFang; // 工作台配方
 	public PeiFang moJing;   // 魔镜配方
+	public java.util.List<String> usedIn; // 原始数据里的“被谁用到”，没有就 null
 
 	public boolean keHeCheng() {
 		return gongFang != null || moJing != null;

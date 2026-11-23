@@ -52,8 +52,8 @@ public class TianRu {
 				for (int i = 0; i < 9; i++) {
 					String key = grid.get(i);
 					if (key == null) continue;
-					// 服务器物品全是改过名的，认名字不认注册名
-					String wantMing = TuBiao.mingOf(key);
+					// 服务器物品全是改过名的，认名字不认注册名；名字里的颜色码/隐藏字符先归一化
+					String wantMing = ShuJuKu.mingKey(TuBiao.mingOf(key));
 					int bagSlot = findBagSlot(mc.player, wantMing);
 					if (bagSlot < 0) continue; // 缺料就直接跳过，按需求不提示
 					int target = craftSlots[i];
@@ -99,7 +99,7 @@ public class TianRu {
 		for (int i = 0; i < 9; i++) {
 			String key = grid.get(i);
 			if (key == null) continue;
-			String nm = TuBiao.mingOf(key);
+			String nm = ShuJuKu.mingKey(TuBiao.mingOf(key));
 			wantName[i] = nm;
 			ItemStack icon = TuBiao.of(key);
 			int cap = Math.min(64, icon.isEmpty() ? 64 : icon.getMaxStackSize());
@@ -109,7 +109,7 @@ public class TianRu {
 			ItemStack cur = menu.slots.get(cells[i]).getItem();
 			if (!cur.isEmpty()) {
 				// 格子里已经是别的东西，整个放弃，不替玩家清格子
-				if (!hoverName(cur).equals(nm)) return;
+				if (!ShuJuKu.mingKey(hoverName(cur)).equals(nm)) return;
 				haveCnt[i] = cur.getCount();
 			}
 			maxCrafts = Math.min(maxCrafts, cap);
@@ -173,7 +173,8 @@ public class TianRu {
 			if (s.container != p.getInventory()) continue;
 			ItemStack st = s.getItem();
 			if (st.isEmpty()) continue;
-			if (hoverName(st).equals(wantMing)) n += st.getCount();
+			String nmKey = ShuJuKu.mingKey(hoverName(st));
+			if (!nmKey.isEmpty() && nmKey.equals(wantMing)) n += st.getCount();
 		}
 		return n;
 	}
@@ -230,7 +231,7 @@ public class TianRu {
 			} catch (Throwable t) {
 				continue;
 			}
-			if (nm.equals(wantMing.trim())) return s.index;
+			if (ShuJuKu.mingKey(nm).equals(ShuJuKu.mingKey(wantMing))) return s.index;
 		}
 		return -1;
 	}

@@ -21,7 +21,7 @@ public class BeiBao {
 		public int you(String key) { return owned.getOrDefault(key, 0); }
 		public int mingYou(String ming) {
 			if (ming == null) return 0;
-			return byMing.getOrDefault(ming.trim(), 0);
+			return byMing.getOrDefault(ShuJuKu.mingKey(ming), 0);
 		}
 		public int que(String key, int need) { return Math.max(0, need - you(key)); }
 	}
@@ -44,19 +44,24 @@ public class BeiBao {
 		if (mc.player == null) return js;
 		Inventory inv = mc.player.getInventory();
 		for (int i = 0; i < inv.getContainerSize(); i++) {
-			ItemStack st = inv.getItem(i);
-			if (st.isEmpty()) continue;
-			String path = pathOf(st);
-			if (path == null) continue;
-			if (!path.contains("shulker_box")) {
-				js.owned.merge("minecraft:" + path, st.getCount(), Integer::sum);
-				String nm = mingOfStack(st);
-				if (!nm.isEmpty()) js.byMing.merge(nm, st.getCount(), Integer::sum);
-			} else {
-				scanShulker(st, js);
-			}
+			countOne(inv.getItem(i), js);
 		}
+		// 鼠标上还捏着一叠的情况也数进去，不然刚拖起来的物品会漏掉
+		if (mc.player.containerMenu != null) countOne(mc.player.containerMenu.getCarried(), js);
 		return js;
+	}
+
+	private static void countOne(ItemStack st, JiShu js) {
+		if (st.isEmpty()) return;
+		String path = pathOf(st);
+		if (path == null) return;
+		if (!path.contains("shulker_box")) {
+			js.owned.merge("minecraft:" + path, st.getCount(), Integer::sum);
+			String nm = mingOfStack(st);
+			if (!nm.isEmpty()) js.byMing.merge(ShuJuKu.mingKey(nm), st.getCount(), Integer::sum);
+		} else {
+			scanShulker(st, js);
+		}
 	}
 
 	private static String mingOfStack(ItemStack st) {
@@ -76,7 +81,7 @@ public class BeiBao {
 				String k = pathOf(inner);
 				if (k != null) js.owned.merge("minecraft:" + k, inner.getCount(), Integer::sum);
 				String nm = mingOfStack(inner);
-				if (!nm.isEmpty()) js.byMing.merge(nm, inner.getCount(), Integer::sum);
+				if (!nm.isEmpty()) js.byMing.merge(ShuJuKu.mingKey(nm), inner.getCount(), Integer::sum);
 			});
 		} catch (Throwable ignored) {}
 	}

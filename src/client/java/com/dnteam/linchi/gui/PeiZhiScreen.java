@@ -25,7 +25,7 @@ public class PeiZhiScreen extends Screen {
 	@Override
 	protected void init() {
 		int cx = this.width / 2;
-		// 行数固定 7 行，按屏幕高度摊开；短屏自动压行距，别让底部按钮骑到数值行上
+		// 右侧固定 7 行数值，按屏幕高度摊开；短屏自动压行距，别让底部按钮骑到数值行上
 		btnY = this.height - 34;
 		int footY = btnY - 16;
 		int top = 112;
@@ -44,11 +44,14 @@ public class PeiZhiScreen extends Screen {
 			PeiZhi.INS.fuMoGuang = v; TuBiao.clearCache();
 		}, colW);
 
-		// 手动检测：每次点都联网，不看 24h 缓存
+		addToggle(lx, rowY0 + rowGap * 4, "数据库自动更新", () -> PeiZhi.INS.ziDongGengXinShuJu,
+			v -> PeiZhi.INS.ziDongGengXinShuJu = v, colW);
+
+		// 手动检测：模组和数据库都查，每次点都联网，不看 24h 缓存
 		addRenderableWidget(Button.builder(Component.literal("检测更新"), b -> {
 			updateMsg = "检测中...";
 			BanBen.manualCheck(Minecraft.getInstance(), msg -> updateMsg = msg);
-		}).bounds(lx, rowY0 + rowGap * 4, colW, 20).build());
+		}).bounds(lx, rowY0 + rowGap * 5, colW, 20).build());
 
 		addNum(rx, rowY0, "HUD行数", () -> PeiZhi.INS.hudHangShu, v -> PeiZhi.INS.hudHangShu = clamp(v, 1, 12), colW);
 		addNum(rx, rowY0 + rowGap, "合成步数", () -> PeiZhi.INS.zhongJianJu, v -> PeiZhi.INS.zhongJianJu = clamp(v, 1, 12), colW);
@@ -114,9 +117,14 @@ public class PeiZhiScreen extends Screen {
 		GuiTool.text(g, "Github: github.com/wpsdql888/LinChiMCMod", this.width / 2 - 140, 90, 0xFF9AD0FF);
 		super.extractRenderState(g, mx, my, delta);
 		int lx = this.width / 2 - 6 - colW;
-		int msgY = rowY0 + rowGap * 4 + 24;
-		if (!updateMsg.isEmpty() && msgY + 9 <= btnY - 14) {
-			GuiTool.text(g, updateMsg, lx, msgY, 0xFF9AD0FF);
+		int msgY = rowY0 + rowGap * 5 + 24;
+		if (!updateMsg.isEmpty()) {
+			String[] lines = updateMsg.split("\n");
+			for (int i = 0; i < lines.length; i++) {
+				int y = msgY + i * 10;
+				if (y + 9 > btnY - 14) break;
+				GuiTool.text(g, lines[i], lx, y, 0xFF9AD0FF);
+			}
 		}
 		// 屏幕太矮时这行会压到最后一行数值上，宁可不画
 		if (rowY0 + rowGap * 6 + 20 <= btnY - 14) {
