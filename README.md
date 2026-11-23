@@ -20,7 +20,8 @@ installation required. Data is bundled inside the mod; no external data download
   - Scans inventory and shulker boxes; refreshes periodically.
   - Completed rows disappear automatically.
 - Crafting guide HUD (bottom right) listing remaining crafting steps.
-- One-click crafting table fill (up to 64 items per ingredient), synchronized with the server.
+- One-click crafting table fill (one item per slot, hold Shift to fill multiple sets),
+  synchronized with the server.
 - In-game manual, shown once on first launch and always available from the config panel.
 - Optional update check (multiplayer only, cached for 24 hours).
 
