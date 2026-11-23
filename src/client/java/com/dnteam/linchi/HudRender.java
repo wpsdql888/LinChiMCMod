@@ -44,18 +44,25 @@ public class HudRender {
 		// 后者任何一处忘了 setOpen(false) 都会让 HUD 永久消失。
 		if (JianRong.currentScreen() != null) return;
 		if (ZhuangTai.INS.targets.isEmpty()) return;
-		if (PeiZhi.INS.hudKai) drawCaiLiao(g, mc);
-		if (PeiZhi.INS.zhuGongKai) drawZhuGong(g, mc);
-		if (PeiZhi.INS.hudKai && ZhuangTai.INS.allDone()) drawDone(g, mc);
+		// 整体缩到 0.75：原来按 1:1 画，GUI 缩放一高就糊半屏。
+		// 缩放后可用坐标变大，位置要按“虚拟宽高”算。
+		g.pose().pushMatrix();
+		g.pose().scale(HUD_SUO, HUD_SUO);
+		int vw = (int) (mc.getWindow().getGuiScaledWidth() / HUD_SUO);
+		int vh = (int) (mc.getWindow().getGuiScaledHeight() / HUD_SUO);
+		if (PeiZhi.INS.hudKai) drawCaiLiao(g, mc, vw, vh);
+		if (PeiZhi.INS.zhuGongKai) drawZhuGong(g, mc, vw, vh);
+		if (PeiZhi.INS.hudKai && ZhuangTai.INS.allDone()) drawDone(g, mc, vw, vh);
+		g.pose().popMatrix();
 	}
+
+	private static final float HUD_SUO = 0.75f;
 
 	// 布局结果缓冲：HUD 每帧算位置，复用数组避免每帧 new int[4]
 	private static final int[] BOX_L = new int[4], BOX_R = new int[4];
 
 	// 聊天框在左下，热键栏在正下方。算一下材料栏能放哪儿，别压到它们
-	private static int[] placeLeft(Minecraft mc, int rows) {
-		int sw = mc.getWindow().getGuiScaledWidth();
-		int sh = mc.getWindow().getGuiScaledHeight();
+	private static int[] placeLeft(int sw, int sh, int rows) {
 		int w = 152, h = rows * 20;
 		int x = 8 + PeiZhi.INS.hudPianYiX;
 		// 窄屏时热键栏会伸到左边，往上挪一点
@@ -71,9 +78,7 @@ public class HudRender {
 	}
 
 	// 右下同理，热键栏右边也可能顶过来
-	private static int[] placeRight(Minecraft mc, int rows) {
-		int sw = mc.getWindow().getGuiScaledWidth();
-		int sh = mc.getWindow().getGuiScaledHeight();
+	private static int[] placeRight(int sw, int sh, int rows) {
 		int w = 172, h = rows * 22;
 		int x = sw - w - 8 - PeiZhi.INS.hudPianYiX;
 		int bottom = sh - 8;
@@ -86,11 +91,11 @@ public class HudRender {
 		return BOX_R;
 	}
 
-	private static void drawCaiLiao(GuiGraphicsExtractor g, Minecraft mc) {
+	private static void drawCaiLiao(GuiGraphicsExtractor g, Minecraft mc, int sw, int sh) {
 		java.util.List<ZhuangTai.CaiRow> rows = ZhuangTai.INS.hudRows();
 		int max = Math.min(Math.max(1, PeiZhi.INS.hudHangShu), rows.size());
 		if (max == 0) return;
-		int[] box = placeLeft(mc, max);
+		int[] box = placeLeft(sw, sh, max);
 		int x = box[0], y = box[1], w = box[2];
 		g.fill(x - 3, y - 4, x + w, y + box[3] + 2, alphaBg());
 		for (int i = 0; i < max; i++) {
@@ -103,18 +108,19 @@ public class HudRender {
 		}
 	}
 
-	private static void drawZhuGong(GuiGraphicsExtractor g, Minecraft mc) {
+	private static void drawZhuGong(GuiGraphicsExtractor g, Minecraft mc, int sw, int sh) {
 		java.util.List<ZhuangTai.BuRow> rows = ZhuangTai.INS.craftRows();
 		int max = Math.min(Math.max(1, PeiZhi.INS.zhongJianJu), rows.size());
 		if (max == 0) return;
-		int[] box = placeRight(mc, max);
+		int[] box = placeRight(sw, sh, max);
 		int x = box[0], y = box[1], w = box[2];
 		g.fill(x - 3, y - 4, x + w, y + box[3] + 2, alphaBg());
 		for (int i = 0; i < max; i++) {
 			ZhuangTai.BuRow r = rows.get(i);
 			int ry = y + i * 22;
 			WuPin wp = ShuJuKu.INS.get(r.bu.ming);
-			if (wp != null) GuiTool.item(g, wp.base, x, ry);
+			// 传中文名，别传 base：base 会把魔法物品画成借用的原版物品，光效也丢了
+			if (wp != null) GuiTool.item(g, wp.ming, x, ry);
 			GuiTool.text(g, "第" + (i + 1) + "步 " + r.bu.ming, x + 22, ry + 1, 0xFFFFD54F);
 			String rem = "剩" + r.remain;
 			GuiTool.text(g, rem, x + w - 4 - textWidth(mc, rem), ry + 11, 0xFF7FE0FF);
@@ -124,9 +130,7 @@ public class HudRender {
 	// 完成提示放准星上方，别挡着中间
 	private static final String DONE_MSG = "材料全部收集完毕 可以进行合成";
 	private static int doneMsgWidth = -1; // 字体固定，宽度算一次就够
-	private static void drawDone(GuiGraphicsExtractor g, Minecraft mc) {
-		int sw = mc.getWindow().getGuiScaledWidth();
-		int sh = mc.getWindow().getGuiScaledHeight();
+	private static void drawDone(GuiGraphicsExtractor g, Minecraft mc, int sw, int sh) {
 		String msg = DONE_MSG;
 		if (doneMsgWidth < 0) doneMsgWidth = mc.font.width(msg);
 		int w = doneMsgWidth + 20;
@@ -150,6 +154,8 @@ public class HudRender {
 
 	static String shortName(String key) {
 		if (key == null) return "";
+		return TuBiao.mingOf(key);
+		/*
 		String n = MING_CACHE.get(key);
 		if (n != null) return n;
 		n = "";
@@ -167,5 +173,6 @@ public class HudRender {
 		}
 		MING_CACHE.put(key, n);
 		return n;
+		*/
 	}
 }

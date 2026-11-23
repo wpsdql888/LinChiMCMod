@@ -19,22 +19,29 @@ public class TuBiao {
 
 	public static ItemStack of(String key) {
 		if (key == null) return ItemStack.EMPTY;
-		String ck = key + "|" + (PeiZhi.INS.fuMoGuang ? 1 : 0);
+		// 只有魔法物品才有附魔光效。原版材料（minecraft:xxx）就让它素着，
+		// 之前无脑给所有图标加光，连铁锭都在闪。
+		boolean moFa = !key.startsWith("minecraft:");
+		boolean guang = PeiZhi.INS.fuMoGuang && moFa;
+		String ck = key + "|" + (guang ? 1 : 0);
 		ItemStack hit = OF_CACHE.get(ck);
 		if (hit != null) return hit;
 		String base = ShuJuKu.INS.baseOf(key);
 		// baseOf 只认 "minecraft:xxx" 和魔法物品中文名；
 		// 魔法物品的 base 字段是裸 id（如 "goat_horn"），baseOf 会返回 null，
 		// 这里兜底把 key 本身当原版 id 再试一次，否则列表/HUD 里魔法物品永远没图标
-		ItemStack st = fromBase(base == null ? key : base);
+		ItemStack st = fromBase(base == null ? key : base, guang);
 		OF_CACHE.put(ck, st);
 		return st;
 	}
 
-	public static ItemStack fromBase(String base) {
+	// 旧调用：默认不给光效
+	public static ItemStack fromBase(String base) { return fromBase(base, false); }
+
+	public static ItemStack fromBase(String base, boolean guang) {
 		if (base == null || base.isEmpty()) return ItemStack.EMPTY;
 		String id = base.contains(":") ? base.toLowerCase(java.util.Locale.ROOT) : "minecraft:" + base.toLowerCase(java.util.Locale.ROOT);
-		String cacheKey = id + "|" + (PeiZhi.INS.fuMoGuang ? 1 : 0);
+		String cacheKey = id + "|" + (guang ? 1 : 0);
 		ItemStack cached = CACHE.get(cacheKey);
 		if (cached != null) return cached;
 		try {
@@ -44,7 +51,7 @@ public class TuBiao {
 				return ItemStack.EMPTY;
 			}
 			ItemStack st = new ItemStack(it);
-			if (PeiZhi.INS.fuMoGuang) {
+			if (guang) {
 				try { st.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true); } catch (Throwable ignored) {}
 			}
 			CACHE.put(cacheKey, st);
@@ -53,6 +60,27 @@ public class TuBiao {
 			CACHE.put(cacheKey, ItemStack.EMPTY);
 			return ItemStack.EMPTY;
 		}
+	}
+
+	// 材料 key -> 显示名。魔法物品直接返回库里的中文名；
+	// 原版 id 走客户端翻译（minecraft:iron_ingot -> 铁锭）。
+	// 判定和提示都认这个，别再看 NBT / 注册名。
+	private static final Map<String, String> MING_CACHE = new HashMap<>();
+
+	public static String mingOf(String key) {
+		if (key == null || key.isEmpty()) return "";
+		String hit = MING_CACHE.get(key);
+		if (hit != null) return hit;
+		WuPin wp = ShuJuKu.INS.get(key);
+		String n;
+		if (wp != null && wp.ming != null) {
+			n = wp.ming;
+		} else {
+			ItemStack st = of(key);
+			n = st.isEmpty() ? key : st.getHoverName().getString();
+		}
+		MING_CACHE.put(key, n);
+		return n;
 	}
 
 	// 光效开关变了就把缓存丢掉，不然图标会停留在旧状态

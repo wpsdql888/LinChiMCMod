@@ -12,6 +12,6 @@ public class LinChiMod implements ModInitializer {
 	public void onInitialize() {
 		ShuJuKu.INS.load();
 		PeiZhi.INS.load();
-		LOG.info("LinChi 1.0.0 初始化完成 - by wpsdql888 / DNT Group");
+		LOG.info("LinsMagic 材料计算器 1.0.0 初始化完成 - by wpsdql888 / DNT Group");
 	}
 }

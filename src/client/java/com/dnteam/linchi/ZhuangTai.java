@@ -50,7 +50,9 @@ public class ZhuangTai {
 	private void rebuild() {
 		hudCache.clear();
 		for (QiuJie.Cai c : latest.base.values()) {
-			int que = jiShu.que(c.key, c.count);
+			// 材料 key 可能是 minecraft:xxx，也可能是魔法物品中文名；
+			// 统一翻成显示名再去背包里数，免得把别的物品算进来。
+			int que = Math.max(0, c.count - jiShu.mingYou(TuBiao.mingOf(c.key)));
 			if (que > 0) {
 				CaiRow r = new CaiRow();
 				r.key = c.key; r.need = c.count; r.que = que;
@@ -62,8 +64,6 @@ public class ZhuangTai {
 
 		craftCache.clear();
 		for (QiuJie.Bu bu : latest.crafts.values()) {
-			// jiShu 里存的是 "minecraft:xxx" 形式的实际物品，不是魔法物品中文名。
-			// 用中文名查永远得到 0，导致“剩余”从不随背包成品减少。改用它的 base。
 			int owned = ownedOf(bu.ming);
 			int remain = Math.max(0, bu.need - owned);
 			if (remain > 0) {
@@ -76,13 +76,9 @@ public class ZhuangTai {
 		version++;
 	}
 
-	// 魔法物品中文名 -> 背包里对应实际物品(base)的拥有数量
+	// 魔法物品中文名 -> 背包里同名物品的拥有数量
 	private int ownedOf(String ming) {
-		WuPin wp = ShuJuKu.INS.get(ming);
-		if (wp == null || wp.base == null) return 0;
-		String base = wp.base.toLowerCase(java.util.Locale.ROOT);
-		String key = base.contains(":") ? base : "minecraft:" + base;
-		return jiShu.you(key);
+		return jiShu.mingYou(ming);
 	}
 
 	public static class CaiRow {

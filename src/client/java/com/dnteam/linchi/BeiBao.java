@@ -15,7 +15,14 @@ public class BeiBao {
 
 	public static class JiShu {
 		public final Map<String, Integer> owned = new HashMap<>();
+		// 按显示名统计。服务器把原版物品都改了名（铁粒叫“铁皮”），
+		// 只认注册名会把一堆同名不同物的东西算到一起，这里以名字为准。
+		public final Map<String, Integer> byMing = new HashMap<>();
 		public int you(String key) { return owned.getOrDefault(key, 0); }
+		public int mingYou(String ming) {
+			if (ming == null) return 0;
+			return byMing.getOrDefault(ming.trim(), 0);
+		}
 		public int que(String key, int need) { return Math.max(0, need - you(key)); }
 	}
 
@@ -43,11 +50,21 @@ public class BeiBao {
 			if (path == null) continue;
 			if (!path.contains("shulker_box")) {
 				js.owned.merge("minecraft:" + path, st.getCount(), Integer::sum);
+				String nm = mingOfStack(st);
+				if (!nm.isEmpty()) js.byMing.merge(nm, st.getCount(), Integer::sum);
 			} else {
 				scanShulker(st, js);
 			}
 		}
 		return js;
+	}
+
+	private static String mingOfStack(ItemStack st) {
+		try {
+			return st.getHoverName().getString().trim();
+		} catch (Throwable t) {
+			return "";
+		}
 	}
 
 	// 潜影盒里的东西也算进去（套娃不管了，一层够用）
@@ -58,6 +75,8 @@ public class BeiBao {
 			box.nonEmptyItemCopyStream().forEach(inner -> {
 				String k = pathOf(inner);
 				if (k != null) js.owned.merge("minecraft:" + k, inner.getCount(), Integer::sum);
+				String nm = mingOfStack(inner);
+				if (!nm.isEmpty()) js.byMing.merge(nm, inner.getCount(), Integer::sum);
 			});
 		} catch (Throwable ignored) {}
 	}

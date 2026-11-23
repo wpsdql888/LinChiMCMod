@@ -19,8 +19,13 @@ public class CaiLiaoBanScreen extends Screen {
 	private final Screen parent;
 	private int px, py, pw, ph, third;
 	private int listTop, listBottom, matY, btnY;
-	private static final int ROW = 22;
-	private static final int RECIPE_W = 200;
+	// Modern UI 会把 GUI 放大，逻辑高度可能只剩两百出头，固定 chrome 会挤掉列表
+	private int topY, titleY, searchY, searchH, btnH, barH, shortScr;
+	// 行高压到 18，图标 12px。原来 22px 一行 + 16px 图标，GUI 缩放一高就占满半屏
+	private static final int ROW = 18;
+	private static final int RECIPE_W = 210;
+	// 配方 3×3 的格子尺寸/起点，画和点都用这套，避免两处算错
+	private int gridCell = 34, gridX0, gridY0;
 
 	private final List<QiuJie.Target> added = new ArrayList<>();
 	private WuPin selLeft, selRight;
@@ -46,53 +51,82 @@ public class CaiLiaoBanScreen extends Screen {
 	private List<QiuJie.Cai> curBase = new ArrayList<>();
 
 	public CaiLiaoBanScreen(Screen parent) {
-		super(Component.literal("LinChi 材料板"));
+		super(Component.literal("LinsMagic 材料板"));
 		this.parent = parent;
 	}
 
 	@Override
 	protected void init() {
-		pw = Math.min(980, this.width - 32);
-		ph = Math.min(580, this.height - 48);
+		pw = Math.min(980, this.width - 24);
+		ph = Math.min(620, this.height - 24);
 		px = (this.width - pw) / 2;
 		py = (this.height - ph) / 2;
-		third = pw / 3;
-		listTop = py + 76;
-		listBottom = py + ph - 86;
-		matY = py + ph - 76;
-		btnY = py + ph - 28;
+		third = Math.max(150, pw / 3);
+		// 逻辑高度不够时整套 chrome 一起缩，不然 Modern UI 放大后列表只剩一两行
+		shortScr = this.height < 330 ? 1 : 0;
+		topY = py + (shortScr == 1 ? 4 : 8);
+		btnH = shortScr == 1 ? 18 : 20;
+		titleY = py + (shortScr == 1 ? 24 : 32);
+		searchY = py + (shortScr == 1 ? 38 : 50);
+		searchH = shortScr == 1 ? 18 : 20;
+		listTop = searchY + searchH + 4;
+		btnY = py + ph - (shortScr == 1 ? 24 : 26);
+		// 底部先给“材料条 + 按钮”留位，列表再吃剩下的高度。
+		// 以前 listBottom 按固定 86 算，小窗口配方格直接被挤出屏幕。
+		barH = shortScr == 1 ? 24 : 32;
+		matY = btnY - (shortScr == 1 ? 30 : 40);
+		listBottom = matY - (shortScr == 1 ? 14 : 18);
 		int thirdBtn = pw / 3;
 
 		addRenderableWidget(Button.builder(Component.literal("材料信息HUD:" + (PeiZhi.INS.hudKai ? "开" : "关")),
 			b -> { PeiZhi.INS.hudKai = !PeiZhi.INS.hudKai; PeiZhi.INS.save();
 				b.setMessage(Component.literal("材料信息HUD:" + (PeiZhi.INS.hudKai ? "开" : "关"))); })
-			.bounds(px + 8, py + 8, thirdBtn - 12, 20).build());
+			.bounds(px + 8, topY, thirdBtn - 12, btnH).build());
 		addRenderableWidget(Button.builder(Component.literal("复制材料清单"), b -> copyMat())
-			.bounds(px + thirdBtn + 4, py + 8, thirdBtn - 8, 20).build());
+			.bounds(px + thirdBtn + 4, topY, thirdBtn - 8, btnH).build());
 		addRenderableWidget(Button.builder(Component.literal("辅助合成:" + (PeiZhi.INS.zhuGongKai ? "开" : "关")),
 			b -> { PeiZhi.INS.zhuGongKai = !PeiZhi.INS.zhuGongKai; PeiZhi.INS.save();
 				b.setMessage(Component.literal("辅助合成:" + (PeiZhi.INS.zhuGongKai ? "开" : "关"))); })
-			.bounds(px + thirdBtn * 2, py + 8, thirdBtn - 12, 20).build());
+			.bounds(px + thirdBtn * 2, topY, thirdBtn - 12, btnH).build());
 
-		searchLeft = new EditBox(Minecraft.getInstance().font, px + 8, py + 50, third - 16, 20, Component.literal("搜索已添加"));
-		searchRight = new EditBox(Minecraft.getInstance().font, px + third + 8, py + 50, third * 2 - 16, 20, Component.literal("搜索全部物品 (右键清空)"));
+		searchLeft = new EditBox(Minecraft.getInstance().font, px + 8, searchY, third - 16, searchH, Component.literal("搜索已添加"));
+		searchRight = new EditBox(Minecraft.getInstance().font, px + third + 8, searchY, pw - third - 16, searchH, Component.literal("搜索全部物品 (右键清空)"));
 		searchRight.setMaxLength(120);
 		searchLeft.setMaxLength(120);
 		addRenderableWidget(searchLeft);
 		addRenderableWidget(searchRight);
 
-		addRenderableWidget(Button.builder(Component.literal("删除"), b -> removeSel()).bounds(px + 8, btnY, 66, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("数量-"), b -> qtySel(-1)).bounds(px + 78, btnY, 50, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("数量+"), b -> qtySel(1)).bounds(px + 132, btnY, 50, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("添加"), b -> addSel()).bounds(px + third + 8, btnY, 66, 20).build());
+		// 五个按钮均分整行，窄窗口也不会“数量+”被“添加”盖住
+		int gap = 6;
+		int bw = Math.max(42, (pw - 16 - gap * 4) / 5);
+		addRenderableWidget(Button.builder(Component.literal("删除"), b -> removeSel())
+			.bounds(px + 8, btnY, bw, btnH).build());
+		addRenderableWidget(Button.builder(Component.literal("数量-"), b -> qtySel(-1))
+			.bounds(px + 8 + (bw + gap), btnY, bw, btnH).build());
+		addRenderableWidget(Button.builder(Component.literal("数量+"), b -> qtySel(1))
+			.bounds(px + 8 + (bw + gap) * 2, btnY, bw, btnH).build());
+		addRenderableWidget(Button.builder(Component.literal("添加"), b -> addSel())
+			.bounds(px + 8 + (bw + gap) * 3, btnY, bw, btnH).build());
 		addRenderableWidget(Button.builder(Component.literal("关闭"), b -> onClose())
-			.bounds(px + pw - 78, btnY, 70, 20).build());
+			.bounds(px + 8 + (bw + gap) * 4, btnY, bw, btnH).build());
 		// 目标清单是全局的（HUD 也要用）：重开材料板时把上次添加的恢复回来，
 		// 否则按 N 关掉再打开，列表就空了，像“材料不见了”
 		added.clear();
 		for (QiuJie.Target t : ZhuangTai.INS.targets) added.add(new QiuJie.Target(t.ming, t.count));
 		refreshViews();
 		recalc();
+	}
+
+	private boolean thirdOpen() { return showRecipe || usesKey != null; }
+
+	// 第三栏（配方/用途）单独关掉，不用把整个材料板关了
+	private void closeThird() {
+		showRecipe = false;
+		usesKey = null;
+		recipeHistory.clear();
+		recipeTarget = null;
+		lastRightQ = "\u0000";
+		refreshViews();
 	}
 
 	// 搜索词变了才重算列表，别每帧扫 2160 条
@@ -121,16 +155,21 @@ public class CaiLiaoBanScreen extends Screen {
 	private int leftRows() { return Math.max(1, (listBottom - listTop - 2) / ROW); }
 	private int rightRows() { return Math.max(1, (listBottom - listTop - 2 - rightHead()) / ROW); }
 	// 配方区宽度自适应：窗口很窄时给右栏留至少 92px，避免 rightListW 变负导致布局翻转。
-	private int recipeW() { return Math.min(RECIPE_W, Math.max(120, third * 2 - 92 - 24)); }
-	private int rightListW() { return showRecipe ? Math.max(92, third * 2 - recipeW() - 24) : third * 2 - 12; }
-	private int recipeX() { return px + pw - recipeW() - 6; }
+	private int recipeW() { return Math.min(RECIPE_W, Math.max(150, (int) (pw * 0.36))); }
+	private int rightListW() {
+		if (!thirdOpen()) return pw - third - 12;
+		// 第三栏打开后中间栏只剩一条缝时干脆不画，免得和配方/用途面板叠在一起
+		int gap = recipeX() - (px + third + 6) - 6;
+		return gap >= 60 ? gap : 0;
+	}
+	private int recipeX() { return px + pw - recipeW() - 4; }
 	// 底部材料条宽度：配方视图时让到配方面板左边，别叠在一起
-	private int baseBarW() { return showRecipe ? recipeX() - px - 20 : pw - 16; }
+	private int baseBarW() { return thirdOpen() ? recipeX() - px - 14 : pw - 16; }
 
 	private void clampScroll() {
 		leftScroll = Math.max(0, Math.min(leftScroll, Math.max(0, leftView.size() - leftRows())));
 		rightScroll = Math.max(0, Math.min(rightScroll, Math.max(0, rightView.size() - rightRows())));
-		int cols = Math.max(1, baseBarW() / 42);
+		int cols = Math.max(1, baseBarW() / 34);
 		matScroll = Math.max(0, Math.min(matScroll, Math.max(0, curBase.size() - cols)));
 	}
 
@@ -203,9 +242,9 @@ public class CaiLiaoBanScreen extends Screen {
 		GuiTool.panel(g, px, py, pw, ph, 0xF0101014);
 		GuiTool.border(g, px, py, pw, ph, 0xFF7B6EF6);
 
-		GuiTool.modIcon(g, px + 8, py + 30, 16);
-		GuiTool.text(g, "LinChi 材料板", px + 28, py + 32, 0xFFFFD54F);
-		GuiTool.text(g, "N / ESC 关闭", px + pw - 96, py + 32, 0xFF888888);
+		GuiTool.modIcon(g, px + 8, titleY - 2, shortScr == 1 ? 12 : 14);
+		GuiTool.text(g, "LinsMagic 材料板", px + (shortScr == 1 ? 24 : 26), titleY, 0xFFFFD54F);
+		GuiTool.text(g, "N / ESC 关闭", px + pw - 96, titleY, 0xFF888888);
 
 		drawLeft(g, mx, my);
 		drawRight(g, mx, my);
@@ -222,12 +261,11 @@ public class CaiLiaoBanScreen extends Screen {
 		for (int i = leftScroll; i < leftView.size() && shown < leftRows(); i++, shown++) {
 			QiuJie.Target t = leftView.get(i);
 			int y = listTop + 2 + shown * ROW;
-			WuPin wp = ShuJuKu.INS.get(t.ming);
 			boolean sel = selLeft != null && selLeft.ming.equals(t.ming);
 			boolean hov = GuiTool.hovered(mx, my, px + 7, y - 2, w - 2, ROW);
 			if (sel || hov) GuiTool.panel(g, px + 7, y - 2, w - 2, ROW, sel ? 0x50606099 : 0x28384070);
-			if (wp != null) GuiTool.item(g, wp.base, px + 10, y);
-			GuiTool.text(g, t.ming + " x" + t.count, px + 32, y + 3, sel ? 0xFFFFFFFF : 0xFFDDDDDD);
+			GuiTool.item(g, t.ming, px + 10, y, 12);
+			GuiTool.text(g, t.ming + " x" + t.count, px + 26, y + 3, sel ? 0xFFFFFFFF : 0xFFDDDDDD);
 		}
 		if (leftView.size() > leftRows()) drawScrollBar(g, px + 6 + w - 4, listTop, listBottom - listTop, leftScroll, leftView.size(), leftRows());
 	}
@@ -236,7 +274,8 @@ public class CaiLiaoBanScreen extends Screen {
 		int w = rightListW();
 		GuiTool.panel(g, px + third + 6, listTop, w, listBottom - listTop, 0x40182818);
 		if (usesKey != null) {
-			GuiTool.text(g, "用途: " + usesKey + "  (右键空白返回)", px + third + 10, listTop + 2, 0xFF7FE0FF);
+			GuiTool.text(g, cut("用途: " + usesKey, w - 24), px + third + 10, listTop + 3, 0xFF7FE0FF);
+			GuiTool.cross(g, px + third + 6 + w - 18, listTop + 2, usesCloseHit(mx, my));
 		}
 		int shown = 0;
 		for (int i = rightScroll; i < rightView.size() && shown < rightRows(); i++, shown++) {
@@ -245,10 +284,30 @@ public class CaiLiaoBanScreen extends Screen {
 			boolean sel = selRight != null && selRight.ming.equals(wp.ming);
 			boolean hov = GuiTool.hovered(mx, my, px + third + 7, y - 2, w - 2, ROW);
 			if (sel || hov) GuiTool.panel(g, px + third + 7, y - 2, w - 2, ROW, sel ? 0x50609960 : 0x28387050);
-			GuiTool.item(g, wp.base, px + third + 10, y);
-			GuiTool.text(g, wp.ming, px + third + 32, y + 3, sel ? 0xFFFFFFFF : 0xFFDDDDDD);
+			GuiTool.item(g, wp.ming, px + third + 10, y, 12);
+			GuiTool.text(g, wp.ming, px + third + 26, y + 3, sel ? 0xFFFFFFFF : 0xFFDDDDDD);
 		}
 		if (rightView.size() > rightRows()) drawScrollBar(g, px + third + 6 + w - 4, listTop, listBottom - listTop, rightScroll, rightView.size(), rightRows());
+	}
+
+	private boolean usesCloseHit(double mx, double my) {
+		return usesKey != null && GuiTool.hovered(mx, my, px + third + 6 + rightListW() - 20, listTop + 2, 16, 16);
+	}
+
+	private boolean recipeCloseHit(double mx, double my) {
+		return showRecipe && GuiTool.hovered(mx, my, recipeX() + recipeW() - 20, listTop + 2, 16, 16);
+	}
+
+	// 第三栏窄的时候标题会顶到关闭钮上，截一下
+	private String cut(String s, int maxW) {
+		net.minecraft.client.gui.Font f = Minecraft.getInstance().font;
+		if (f.width(s) <= maxW) return s;
+		StringBuilder b = new StringBuilder();
+		for (char c : s.toCharArray()) {
+			if (f.width(b.toString() + c + "..") > maxW) break;
+			b.append(c);
+		}
+		return b + "..";
 	}
 
 	private void drawScrollBar(GuiGraphicsExtractor g, int x, int y, int h, int off, int total, int rows) {
@@ -272,42 +331,63 @@ public class CaiLiaoBanScreen extends Screen {
 		int rx = recipeX(), rw = recipeW(), rh = listBottom - listTop;
 		GuiTool.panel(g, rx, listTop, rw, rh, 0xF0181820);
 		GuiTool.border(g, rx, listTop, rw, rh, 0xFFF0A500);
-		GuiTool.item(g, wp.base, rx + 8, listTop + 8);
-		GuiTool.text(g, wp.ming, rx + 30, listTop + 10, 0xFFFFD54F);
-		if (!recipeHistory.isEmpty()) GuiTool.text(g, "<-", rx + rw - 30, listTop + 10, 0xFF7FE0FF);
+		GuiTool.text(g, cut(wp.ming, rw - 34), rx + 8, listTop + 5, 0xFFFFD54F);
+		GuiTool.cross(g, rx + rw - 20, listTop + 2, recipeCloseHit(mx, my));
+		if (!recipeHistory.isEmpty()) GuiTool.text(g, "<-", rx + rw - 38, listTop + 5, 0xFF7FE0FF);
 
 		List<PeiFang> pfs = recipesOf(wp);
 		if (pfs.isEmpty()) return;
 		recipePage = Math.max(0, Math.min(recipePage, pfs.size() - 1));
 		PeiFang pf = pfs.get(recipePage);
-		GuiTool.text(g, (pf.mirror ? "魔镜" : "工作台") + (pfs.size() > 1 ? "  (" + (recipePage + 1) + "/" + pfs.size() + ") 滚轮切换" : "") + "  产出x" + pf.count,
-			rx + 8, listTop + 32, 0xFFAAAAAA);
-
-		List<String> grid = gridOf(pf);
-		for (int i = 0; i < 9; i++) {
-			int gx = rx + 22 + (i % 3) * 46, gy = listTop + 48 + (i / 3) * 46;
-			String k = grid.get(i);
-			boolean hov = k != null && GuiTool.hovered(mx, my, gx, gy, 40, 40);
-			GuiTool.panel(g, gx, gy, 40, 40, hov ? 0x70504580 : 0x50303040);
-			GuiTool.border(g, gx, gy, 40, 40, hov ? 0xFFB9A6FF : 0xFF605070);
-			if (k != null) GuiTool.item(g, k, gx + 12, gy + 12);
+		// 头部高度跟着面板走。Modern UI 下逻辑高度可能只有一百多像素，
+		// 固定 38px 的头会把 3×3 挤没，之前直接显示“窗口太矮”。
+		int headH = Math.max(14, Math.min(38, rh / 5));
+		if (headH >= 30) {
+			GuiTool.text(g, (pf.mirror ? "魔镜" : "工作台") + (pfs.size() > 1 ? " (" + (recipePage + 1) + "/" + pfs.size() + ")" : "") + "  产出x" + pf.count,
+				rx + 8, listTop + 21, 0xFFAAAAAA);
 		}
-		GuiTool.text(g, "点材料可展开配方", rx + 8, listTop + 48 + 3 * 46 + 4, 0xFF888888);
+		int availH = rh - headH - 10;
+		int cell = Math.min(40, Math.max(10, availH / 3 - 3));
+		int span = cell + 3;
+		if (cell < 10 || headH + span * 3 > rh - 2) {
+			gridCell = 0;
+			GuiTool.text(g, "窗口太矮，拉大一点再看配方", rx + 8, listTop + headH, 0xFF888888);
+			return;
+		}
+		int gw = cell * 3 + 6;
+		gridCell = cell;
+		gridX0 = rx + (rw - gw) / 2;
+		gridY0 = listTop + headH;
+		List<String> grid = gridOf(pf);
+		int icon = Math.max(8, Math.min(12, cell - 2));
+		for (int i = 0; i < 9; i++) {
+			int gx = gridX0 + (i % 3) * span;
+			int gy = gridY0 + (i / 3) * span;
+			String k = grid.get(i);
+			boolean hov = k != null && GuiTool.hovered(mx, my, gx, gy, cell, cell);
+			GuiTool.panel(g, gx, gy, cell, cell, hov ? 0x70504580 : 0x50303040);
+			GuiTool.border(g, gx, gy, cell, cell, hov ? 0xFFB9A6FF : 0xFF605070);
+			if (k != null) GuiTool.item(g, k, gx + (cell - icon) / 2, gy + (cell - icon) / 2, icon);
+		}
+		int hintY = gridY0 + span * 3 + 2;
+		if (hintY + 9 <= listBottom) {
+			GuiTool.text(g, "点材料可展开配方", rx + 8, hintY, 0xFF888888);
+		}
 	}
 
 	private void drawBaseBar(GuiGraphicsExtractor g, int mx, int my) {
 		int bw = baseBarW();
-		GuiTool.text(g, "基础材料 (" + curBase.size() + ")  滚轮翻动", px + 8, matY - 12, 0xFF7FE0FF);
-		GuiTool.panel(g, px + 6, matY, bw, 44, 0x50101018);
-		int cols = Math.max(1, bw / 42);
+		GuiTool.text(g, "基础材料 (" + curBase.size() + ")  滚轮翻动", px + 8, matY - 11, 0xFF7FE0FF);
+		GuiTool.panel(g, px + 6, matY, bw, barH, 0x50101018);
+		int cols = Math.max(1, bw / 34);
 		int start = Math.min(matScroll, Math.max(0, curBase.size() - cols));
 		for (int i = 0; i < cols && start + i < curBase.size(); i++) {
 			QiuJie.Cai c = curBase.get(start + i);
-			int cx = px + 10 + i * 42;
-			boolean hov = GuiTool.hovered(mx, my, cx, matY, 40, 40);
-			if (hov) GuiTool.panel(g, cx, matY, 40, 40, 0x30406080);
-			GuiTool.item(g, c.key, cx + 2, matY + 1);
-			GuiTool.text(g, String.valueOf(c.count), cx + 12, matY + 24, 0xFFFFFFFF);
+			int cx = px + 10 + i * 34;
+			boolean hov = GuiTool.hovered(mx, my, cx, matY, 30, barH);
+			if (hov) GuiTool.panel(g, cx, matY, 30, barH, 0x30406080);
+			GuiTool.item(g, c.key, cx + 1, matY + 1, 12);
+			GuiTool.text(g, String.valueOf(c.count), cx + 1, matY + (shortScr == 1 ? 13 : 17), 0xFFFFFFFF);
 		}
 	}
 
@@ -317,14 +397,12 @@ public class CaiLiaoBanScreen extends Screen {
 		if (mx >= px + 6 && mx < px + third - 6) {
 			int row = (my - listTop - 2) / ROW + leftScroll;
 			if (row >= 0 && row < leftView.size()) {
-				WuPin wp = ShuJuKu.INS.get(leftView.get(row).ming);
-				if (wp != null) GuiTool.itemTip(g, wp.base, mx, my);
+				GuiTool.itemTip(g, leftView.get(row).ming, mx, my);
 			}
 		} else if (mx >= px + third + 6 && mx < px + third + 6 + rightListW()) {
 			int row = (my - listTop - 2 - rightHead()) / ROW + rightScroll;
 			if (row >= 0 && row < rightView.size()) {
-				WuPin wp = rightView.get(row);
-				if (wp != null) GuiTool.itemTip(g, wp.base, mx, my);
+				GuiTool.itemTip(g, rightView.get(row).ming, mx, my);
 			}
 		}
 	}
@@ -335,40 +413,36 @@ public class CaiLiaoBanScreen extends Screen {
 		int button = e.button();
 		// 点到搜索框：先显式把容器焦点交过去，再走原版分发。
 		// 有输入法/别的模组改动焦点链时，不主动这一步可能点了也 focus 不上（表现：光标在框里却打不了字）
-		if (GuiTool.hovered(cx, cy, px + 8, py + 50, third - 16, 20)) this.setFocused(searchLeft);
-		else if (GuiTool.hovered(cx, cy, px + third + 8, py + 50, third * 2 - 16, 20)) this.setFocused(searchRight);
+		if (GuiTool.hovered(cx, cy, px + 8, searchY, third - 16, searchH)) this.setFocused(searchLeft);
+		else if (GuiTool.hovered(cx, cy, px + third + 8, searchY, pw - third - 16, searchH)) this.setFocused(searchRight);
 		// 右键搜索框直接清空，JEI 就是这个习惯
-		if (button == 1 && cy >= py + 50 && cy < py + 70) {
+		if (button == 1 && cy >= searchY && cy < searchY + searchH) {
 			if (cx >= px + 8 && cx < px + third - 8) { searchLeft.setValue(""); return true; }
 			if (cx >= px + third + 8 && cx < px + pw - 8) {
-				if (usesKey != null) { usesKey = null; lastRightQ = "\u0000"; refreshViews(); }
+				if (usesKey != null) { closeThird(); }
 				else searchRight.setValue("");
 				return true;
 			}
 		}
+		// 第三栏自己的关闭钮
+		if (recipeCloseHit(cx, cy) || usesCloseHit(cx, cy)) { closeThird(); return true; }
+
 		if (cy >= listTop && cy < listBottom) {
 			int rowL = (cy - listTop - 2) / ROW + leftScroll;
 			int rowR = (cy - listTop - 2 - rightHead()) / ROW + rightScroll;
 			if (cx >= px + 6 && cx < px + third - 6 && rowL >= 0 && rowL < leftView.size()) {
 				QiuJie.Target t = leftView.get(rowL);
 				selLeft = ShuJuKu.INS.get(t.ming);
-				if (button == 1) {
-					openUses(t.ming);          // 右键看哪些成品要它
-				} else {
-					openRecipe(selLeft, true); // 左键看它的做法
-					if (doubleClick) removeSel();
-				}
+				if (button == 1) { openThirdUses(t.ming); return true; }
+				// 单击只选中，双击才展开第三栏
+				if (doubleClick) openThirdRecipe(selLeft, true);
 				return true;
 			}
 			if (cx >= px + third + 6 && cx < px + third + 6 + rightListW() && rowR >= 0 && rowR < rightView.size()) {
 				WuPin wp = rightView.get(rowR);
 				selRight = wp;
-				if (button == 1) {
-					openUses(wp.ming);
-				} else {
-					openRecipe(wp, false);
-					if (doubleClick) addSel();
-				}
+				if (button == 1) { openThirdUses(wp.ming); return true; }
+				if (doubleClick) openThirdRecipe(wp, false);
 				return true;
 			}
 			// 配方面板里的材料：能展开就往里走一层
@@ -376,27 +450,45 @@ public class CaiLiaoBanScreen extends Screen {
 				PeiFang pf = curPf();
 				if (pf != null) {
 					List<String> grid = gridOf(pf);
+					int span = gridCell + 4;
 					for (int i = 0; i < 9; i++) {
-						int gx = recipeX() + 22 + (i % 3) * 46, gy = listTop + 48 + (i / 3) * 46;
+						int gx = gridX0 + (i % 3) * span;
+						int gy = gridY0 + (i / 3) * span;
 						String k = grid.get(i);
-						if (k != null && GuiTool.hovered(cx, cy, gx, gy, 44, 44)) {
+						if (k != null && GuiTool.hovered(cx, cy, gx, gy, gridCell, gridCell)) {
 							WuPin next = ShuJuKu.INS.get(k);
 							if (next != null && next.keHeCheng() && next != recipeTarget) {
 								recipeHistory.push(recipeTarget);
 								recipeTarget = next; recipePage = 0;
 							} else {
-								openUses(k);
+								openThirdUses(k);
 							}
 							return true;
 						}
 					}
 				}
-				if (cx >= recipeX() + recipeW() - 32 && cy < listTop + 24 && !recipeHistory.isEmpty()) {
+				if (cx >= recipeX() + recipeW() - 40 && cy < listTop + 24 && !recipeHistory.isEmpty()) {
 					recipeTarget = recipeHistory.pop(); recipePage = 0; return true;
 				}
 			}
 		}
+		// 提示里一直写着“右键空白返回”，但以前只有搜索框那块吃这个手势。
+		// 现在空白处右键真能关掉第三栏，不用整个面板关掉再开。
+		if (button == 1 && thirdOpen()) { closeThird(); return true; }
 		return super.mouseClicked(e, doubleClick);
+	}
+
+	private void openThirdRecipe(WuPin wp, boolean fromLeft) {
+		if (wp == null) return;
+		if (wp.keHeCheng()) openRecipe(wp, fromLeft);
+		else openThirdUses(wp.ming);
+	}
+
+	// 没用途的物品别把右栏切成一张空白“用途”页
+	private void openThirdUses(String key) {
+		if (key == null) return;
+		if (ShuJuKu.INS.getUses(key).isEmpty()) return;
+		openUses(key);
 	}
 
 	// 当前目标的配方列表（工作台/魔镜）：按目标缓存，避免每帧 new ArrayList
@@ -420,7 +512,7 @@ public class CaiLiaoBanScreen extends Screen {
 	@Override
 	public boolean mouseScrolled(double mx, double my, double dx, double dy) {
 		int dir = dy > 0 ? -1 : 1;
-		if (my >= matY && my < matY + 44 && mx >= px + 6 && mx < px + pw - 8) {
+		if (my >= matY && my < matY + barH && mx >= px + 6 && mx < px + 6 + baseBarW()) {
 			matScroll += dir;
 		} else if (showRecipe && mx >= recipeX() && mx < recipeX() + recipeW() && my >= listTop && my < listBottom) {
 			recipePage += dir; // 多个配方之间来回切
@@ -469,7 +561,7 @@ public class CaiLiaoBanScreen extends Screen {
 		if (e.hasControlDown() && e.key() == InputConstants.KEY_F) { setFocused(searchRight); return true; }
 		if (e.key() == InputConstants.KEY_BACKSPACE) { // Backspace 往回退
 			if (showRecipe && !recipeHistory.isEmpty()) { recipeTarget = recipeHistory.pop(); recipePage = 0; return true; }
-			if (usesKey != null) { usesKey = null; lastRightQ = "\u0000"; refreshViews(); return true; }
+			if (thirdOpen()) { closeThird(); return true; }
 		}
 		if (!isTyping()) {
 			if (e.key() == InputConstants.KEY_HOME) { if (inLeft()) leftScroll = 0; else rightScroll = 0; return true; }

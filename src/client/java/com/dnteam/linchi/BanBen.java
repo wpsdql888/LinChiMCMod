@@ -56,7 +56,7 @@ public class BanBen {
 				Component link = Component.literal("点击此处")
 					.withStyle(Style.EMPTY.withClickEvent(new ClickEvent.OpenUrl(URI.create(UPDATE_PAGE)))
 						.withUnderlined(true));
-				Component msg = Component.literal("[LinChi]有新版本v" + v + "可供使用，")
+				Component msg = Component.literal("[LinsMagic]有新版本v" + v + "可供使用，")
 					.append(link).append("查看更新方式");
 				mc.player.sendSystemMessage(msg);
 			});

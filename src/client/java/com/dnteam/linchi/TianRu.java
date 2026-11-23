@@ -7,6 +7,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -33,6 +34,8 @@ public class TianRu {
 		int[] craftSlots = new int[9];
 		Arrays.fill(craftSlots, -1);
 		for (Slot s : menu.slots) {
+			// 结果槽不是输入格，排掉更稳，免得在某些容器实现里顶掉第 1 格
+			if (s instanceof ResultSlot) continue;
 			if (s.container instanceof Container c && c.getContainerSize() == 9 && s.getContainerSlot() >= 0 && s.getContainerSlot() < 9) {
 				craftSlots[s.getContainerSlot()] = s.index;
 			}
@@ -49,9 +52,9 @@ public class TianRu {
 				for (int i = 0; i < 9; i++) {
 					String key = grid.get(i);
 					if (key == null) continue;
-					String base = ShuJuKu.INS.baseOf(key);
-					if (base == null) continue;
-					int bagSlot = findBagSlot(mc.player, base);
+					// 服务器物品全是改过名的，认名字不认注册名
+					String wantMing = TuBiao.mingOf(key);
+					int bagSlot = findBagSlot(mc.player, wantMing);
 					if (bagSlot < 0) continue; // 缺料就直接跳过，按需求不提示
 					int target = craftSlots[i];
 					menu.clicked(bagSlot, 0, ContainerInput.PICKUP, mc.player); // 拾起一叠
@@ -68,6 +71,26 @@ public class TianRu {
 	}
 
 	// 只找背包本体，不去翻潜影盒 —— 潜影盒里的按“缺料”处理，静默失败
+	// 匹配用显示名：minecraft:iron_ingot 会翻成“铁锭”，魔法物品直接用中文名
+	private static int findBagSlot(Player p, String wantMing) {
+		if (wantMing == null || wantMing.isEmpty()) return -1;
+		AbstractContainerMenu menu = p.containerMenu;
+		for (Slot s : menu.slots) {
+			if (s.container != p.getInventory()) continue;
+			ItemStack st = s.getItem();
+			if (st.isEmpty()) continue;
+			String nm;
+			try {
+				nm = st.getHoverName().getString().trim();
+			} catch (Throwable t) {
+				continue;
+			}
+			if (nm.equals(wantMing.trim())) return s.index;
+		}
+		return -1;
+	}
+
+	/*
 	private static int findBagSlot(Player p, String base) {
 		String id = base.contains(":") ? base.toLowerCase(Locale.ROOT) : "minecraft:" + base.toLowerCase(Locale.ROOT);
 		AbstractContainerMenu menu = p.containerMenu;
@@ -83,4 +106,5 @@ public class TianRu {
 		}
 		return -1;
 	}
+	*/
 }
