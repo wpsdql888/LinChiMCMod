@@ -8,19 +8,20 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-// 工作台右侧那三行“填入”指引。渲染给 Mixin 调，鼠标走 Fabric 的 ScreenMouseEvents
-// 这样不用往 CraftingScreen 里硬塞注入点 —— 那类根本没声明 mouseClicked/mouseScrolled
+// 工作台右侧的单步向导：一次只显示当前这一步，填完再走下一步
+// 渲染给 Mixin 调，鼠标走 Fabric 的 ScreenMouseEvents
 public class GongFangZhiYin {
-	private static final int ROWS = 3;
-	private static final int ROW_H = 18;
-	private static final int MIN_W = 78;
-	private static final int MAX_W = 128;
-	private static int page = 0;
+	private static final int MIN_W = 96;
+	private static final int MAX_W = 150;
+	private static final int LINE_H = 10;
+	private static final int BTN_H = 18;
 
 	// 合成界面不是永远居中：开了配方书 leftPos 会往右挪。
-	// 缓存 AbstractContainerScreen 的 leftPos/topPos，跟着原版界面走，不再按屏幕中点硬算。
+	// 缓存 AbstractContainerScreen 的 leftPos/topPos，跟着原版界面走。
 	private static java.lang.reflect.Field F_LEFT, F_TOP;
 
 	private static java.lang.reflect.Field findField(Class<?> c, String name) {
@@ -51,99 +52,227 @@ public class GongFangZhiYin {
 		return (s.height - 166) / 2;
 	}
 
-	// 面板位置/宽度每帧现算：Modern UI 会把 GUI 放大，屏幕的逻辑宽高变小，
-	// 固定 128 宽经常直接顶出屏幕，表现就是“辅助合成没了”。
-	// 先贴着原版界面右边，宽度按剩余空间收；不行再挪到界面下方、上方，最后贴屏幕右边。
-	private static final int[] PL = new int[3];
+	// 步骤列表来自求解器，按依赖层级排好；done 记录本次目标已经走过的步骤
+	private static final List<QiuJie.Bu> steps = new ArrayList<>();
+	private static final Set<String> done = new HashSet<>();
+	private static int idx = 0;
+	private static String sig = "";
+	private static boolean autoDone = false;
+	private static String blockMsg = "";
 
-	private static int[] place(Screen s, int rowCount) {
-		int w = Math.min(MAX_W, Math.max(MIN_W, s.width - (leftOf(s) + 176) - 8));
-		int x = leftOf(s) + 176 + 6;
-		int y = topOf(s) + 6;
-		if (x + w <= s.width - 2 && y + rowCount * ROW_H <= s.height - 2) {
-			PL[0] = x; PL[1] = y; PL[2] = w;
-			return PL;
-		}
-		// 下方
-		int bw = Math.min(176, s.width - 8);
-		int bx = Math.max(4, (s.width - bw) / 2);
-		int by = topOf(s) + 166 + 4;
-		if (by + rowCount * ROW_H <= s.height - 2) {
-			PL[0] = bx; PL[1] = by; PL[2] = bw;
-			return PL;
-		}
-		// 上方
-		int ay = topOf(s) - rowCount * ROW_H - 4;
-		if (ay >= 2) {
-			PL[0] = bx; PL[1] = ay; PL[2] = bw;
-			return PL;
-		}
-		// 实在没地方就贴右边，压一点界面也比完全看不见强
-		PL[0] = Math.max(2, s.width - w - 4);
-		PL[1] = Math.max(2, Math.min(y, s.height - rowCount * ROW_H - 2));
-		PL[2] = w;
-		return PL;
+	private static final int[] L = new int[4];
+	private static final int[] B1 = new int[4];
+	private static final int[] B2 = new int[4];
+
+	private static QiuJie.Bu current() {
+		return idx >= 0 && idx < steps.size() ? steps.get(idx) : null;
 	}
 
-	// 行视图缓存：只在“数据版本”或页码变化时重算。
-	// 注意 craftRows() 返回的是同一个 ArrayList 实例（重建时 clear+重填），
-	// 比对实例引用永远相等，必须用版本号才能感知数据刷新。
-	private static int rowsVer = -1;
-	private static int rowsPage = -1;
-	private static List<ZhuangTai.BuRow> rowsView = new ArrayList<>();
+	private static boolean manual(QiuJie.Bu bu) {
+		return bu == null || bu.pf == null || bu.pf.mirror;
+	}
 
-	private static List<ZhuangTai.BuRow> rows() {
-		List<ZhuangTai.BuRow> all = ZhuangTai.INS.craftRows();
-		int maxPage = Math.max(0, (all.size() - 1) / ROWS);
-		if (page > maxPage) page = maxPage;
-		int ver = ZhuangTai.INS.version();
-		if (rowsVer == ver && rowsPage == page) return rowsView;
-		int from = page * ROWS;
-		rowsView = new ArrayList<>(all.subList(from, Math.min(all.size(), from + ROWS)));
-		rowsVer = ver;
-		rowsPage = page;
-		return rowsView;
+	private static int owned(QiuJie.Bu bu) {
+		return ZhuangTai.INS.jiShu == null ? 0 : ZhuangTai.INS.jiShu.mingYou(bu.ming);
+	}
+
+	private static int remain(QiuJie.Bu bu) {
+		return Math.max(0, bu.need - owned(bu));
+	}
+
+	private static String signature() {
+		StringBuilder sb = new StringBuilder();
+		for (QiuJie.Target t : ZhuangTai.INS.targets)
+			sb.append(t.ming).append('\u0001').append(t.count).append('\u0002');
+		for (QiuJie.Bu bu : ZhuangTai.INS.latest.crafts.values())
+			sb.append(bu.ming).append('\u0003').append(bu.need).append('\u0004');
+		return sb.toString();
+	}
+
+	private static void refresh() {
+		String s = signature();
+		steps.clear();
+		for (QiuJie.Bu bu : ZhuangTai.INS.latest.crafts.values()) steps.add(bu);
+
+		if (!s.equals(sig)) {
+			sig = s;
+			done.clear();
+			idx = 0;
+			autoDone = false;
+			blockMsg = "";
+			// 进工作台时产物已经在背包里的步骤直接算完成
+			for (QiuJie.Bu bu : steps) if (remain(bu) <= 0) done.add(bu.ming);
+		}
+
+		QiuJie.Bu cur = current();
+		// 工作台步骤产物检测到了就标记完成，停在当前步等玩家点“下一步”
+		if (cur != null && !manual(cur) && !done.contains(cur.ming) && remain(cur) <= 0) {
+			done.add(cur.ming);
+			autoDone = true;
+		}
+		// 拦截提示里的数量过时了就清掉，别一直挂着旧数字
+		if (!blockMsg.isEmpty() && cur != null && owned(cur) >= cur.need) blockMsg = "";
+		if (!autoDone) {
+			while (idx < steps.size() && done.contains(steps.get(idx).ming)) idx++;
+		}
+		if (idx >= steps.size()) autoDone = false;
+	}
+
+	private static void advance() {
+		if (idx < steps.size()) done.add(steps.get(idx).ming);
+		idx++;
+		autoDone = false;
+		blockMsg = "";
+		while (idx < steps.size() && done.contains(steps.get(idx).ming)) idx++;
+	}
+
+	private static void tryNext(QiuJie.Bu cur) {
+		int need = cur.need;
+		// 点下一步时现扫一次，别用 250ms 前可能还没刷新的缓存
+		int have = BeiBao.scan().mingYou(cur.ming);
+		if (have >= need) {
+			done.add(cur.ming);
+			advance();
+		} else {
+			blockMsg = "背包里 " + have + "/" + need + "，请先放入背包或潜影盒";
+		}
+	}
+
+	private static int[] layout(Screen s) {
+		int x = leftOf(s) + 176 + 6;
+		int right = s.width - 4;
+		int w = Math.min(MAX_W, Math.max(MIN_W, right - x));
+		// 右侧空间实在不够就贴右边缘，宁可压住一点界面也不挪到别处
+		if (x + w > right) {
+			w = MIN_W;
+			x = Math.max(4, right - w);
+		}
+		int y = topOf(s) + 6;
+
+		boolean allDone = idx >= steps.size();
+		QiuJie.Bu cur = current();
+		boolean manual = cur != null && manual(cur);
+		boolean warn = !allDone && !ZhuangTai.INS.hudRows().isEmpty();
+		int textLines = allDone ? 2 : (manual ? 3 : 2);
+
+		int h;
+		if (allDone) {
+			h = 6 + textLines * LINE_H + 6;
+		} else {
+			h = 6 + textLines * LINE_H + (warn ? LINE_H : 0) + 4 + BTN_H;
+			if (manual) h += 15;
+			h += 4 + 9 + 4;
+		}
+		L[0] = x; L[1] = y; L[2] = w; L[3] = h;
+
+		int by = y + 6 + textLines * LINE_H + (warn ? LINE_H : 0) + 3;
+		B1[0] = x + 4; B1[1] = by; B1[2] = w - 8; B1[3] = BTN_H;
+		B2[0] = x + 4; B2[1] = by + BTN_H + 2; B2[2] = w - 8; B2[3] = 13;
+		return L;
+	}
+
+	private static String obtainText(QiuJie.Bu bu) {
+		WuPin wp = ShuJuKu.INS.get(bu.ming);
+		if (wp != null && wp.huoQu != null && !wp.huoQu.isBlank()) return wp.huoQu;
+		if (bu.pf != null && bu.pf.mirror) return "魔镜合成";
+		return "按服务器要求完成本步";
+	}
+
+	private static void addGrid(List<String> lines, PeiFang pf) {
+		List<String> grid = pf.jiuGe();
+		for (int k = 0; k < 9; k++) {
+			if (grid.get(k) != null) lines.add("第" + (k + 1) + "格: " + TuBiao.mingOf(grid.get(k)));
+		}
 	}
 
 	public static void draw(GuiGraphicsExtractor g, Screen s, int mx, int my) {
 		if (!PeiZhi.INS.zhuGongKai) return;
-		List<ZhuangTai.BuRow> rows = rows();
-		if (rows.isEmpty()) return;
-		int[] pl = place(s, rows.size());
-		int x = pl[0], y = pl[1], w = pl[2];
-		for (int i = 0; i < rows.size(); i++) {
-			ZhuangTai.BuRow r = rows.get(i);
-			int ry = y + i * ROW_H;
-			boolean hov = GuiTool.hovered(mx, my, x, ry, w, ROW_H - 1);
-			// 原版按钮贴图，跟合成界面同一套视觉，Modern UI 缩放也不会走样
-			GuiTool.button(g, x, ry, w, ROW_H - 1, hov);
-			GuiTool.text(g, fit("填入 " + r.bu.ming + " ×" + r.remain, w - 8), x + 4, ry + 4, 0xFFFFFFFF);
-			if (hov) {
-				WuPin wp = ShuJuKu.INS.get(r.bu.ming);
-				List<String> lines = new ArrayList<>();
-				lines.add("目标: " + r.bu.ming + "  还需 " + r.remain);
-				PeiFang pf = r.bu.pf != null ? r.bu.pf : (wp == null ? null : wp.gongFang);
-				if (pf != null) {
-					List<String> grid = pf.jiuGe();
-					for (int k = 0; k < 9; k++) {
-						if (grid.get(k) != null) lines.add("第" + (k + 1) + "格: " + TuBiao.mingOf(grid.get(k)));
-					}
-					lines.add("共合成 " + pf.count + " 个");
-				}
-				lines.add("点击尽可能多填（每格最多 64 个）");
-				List<Component> comps = new ArrayList<>();
-				for (String line : lines) comps.add(Component.literal(line));
-				g.setTooltipForNextFrame(Minecraft.getInstance().font, comps, java.util.Optional.empty(), mx, my);
+		if (ZhuangTai.INS.targets.isEmpty()) return;
+		refresh();
+		if (steps.isEmpty()) return;
+		int[] pl = layout(s);
+		int x = pl[0], y = pl[1], w = pl[2], h = pl[3];
+		GuiTool.panel(g, x, y, w, h, 0xCC101018);
+
+		boolean allDone = idx >= steps.size();
+		QiuJie.Bu cur = current();
+		boolean manual = cur != null && manual(cur);
+		boolean warn = !allDone && !ZhuangTai.INS.hudRows().isEmpty();
+		int tx = x + 6, ty = y + 6;
+
+		GuiTool.text(g, allDone ? "全部完成" : "第 " + (idx + 1) + "/" + steps.size() + " 步",
+			tx, ty, 0xFFFFD54F);
+
+		if (allDone) {
+			GuiTool.text(g, "所有步骤已完成", tx, ty + LINE_H, 0xFF7FE0FF);
+		} else {
+			boolean curDone = done.contains(cur.ming) || remain(cur) <= 0;
+			String line;
+			if (manual) line = "操作: " + cur.ming;
+			else line = curDone ? "本步完成: " + cur.ming : "合成 " + cur.ming + " ×" + remain(cur);
+			GuiTool.text(g, fit(line, w - 12), tx, ty + LINE_H, 0xFFFFFFFF);
+
+			if (manual) {
+				GuiTool.text(g, fit(obtainText(cur), w - 12), tx, ty + LINE_H * 2, 0xFFAAAAAA);
 			}
+			if (warn) {
+				int wy = ty + (manual ? 3 : 2) * LINE_H;
+				GuiTool.text(g, "基础材料还缺 " + ZhuangTai.INS.hudRows().size() + " 种", tx, wy, 0xFFFF8888);
+			}
+
+			String label = manual ? "下一步" : (curDone ? "下一步" : "填入本步");
+			drawButton(g, B1, label, mx, my);
+			if (manual) drawButton(g, B2, "强制下一步", mx, my);
+
+			String hint = manual
+				? (blockMsg.isEmpty() ? "完成后放入背包或潜影盒" : blockMsg)
+				: "只填本步剩余量，单次最多64组";
+			int hy = B1[1] + BTN_H + (manual ? 15 : 0) + 3;
+			GuiTool.text(g, fit(hint, w - 12), tx, hy, blockMsg.isEmpty() ? 0xFF888888 : 0xFFFF6666);
 		}
-		int total = ZhuangTai.INS.craftRows().size();
-		if (total > ROWS) {
-			GuiTool.text(g, (page + 1) + "/" + ((total + ROWS - 1) / ROWS) + " 滚轮翻页",
-				x, y + rows.size() * ROW_H + 2, 0xFF888888);
-		}
+
+		tooltip(g, mx, my, x, y, w, h, allDone, cur, manual);
 	}
 
-	// 按钮字太长就截断，别糊出按钮外
+	private static void drawButton(GuiGraphicsExtractor g, int[] r, String label, int mx, int my) {
+		boolean hov = GuiTool.hovered(mx, my, r[0], r[1], r[2], r[3]);
+		GuiTool.button(g, r[0], r[1], r[2], r[3], hov);
+		int tw = Minecraft.getInstance().font.width(label);
+		GuiTool.text(g, label, r[0] + (r[2] - tw) / 2, r[1] + (r[3] - 8) / 2, 0xFFFFFFFF);
+	}
+
+	private static void tooltip(GuiGraphicsExtractor g, int mx, int my, int x, int y, int w, int h,
+								boolean allDone, QiuJie.Bu cur, boolean manual) {
+		if (!GuiTool.hovered(mx, my, x, y, w, h)) return;
+		List<String> lines = new ArrayList<>();
+		if (allDone) {
+			lines.add("全部完成");
+		} else {
+			lines.add("第 " + (idx + 1) + "/" + steps.size() + " 步");
+			if (manual) {
+				lines.add("操作: " + cur.ming);
+				String ob = obtainText(cur);
+				if (ob != null && !ob.isBlank()) lines.add(ob);
+				if (cur.pf != null) addGrid(lines, cur.pf);
+				lines.add("背包/潜影盒: " + owned(cur) + " / " + cur.need);
+				lines.add("完成后放入背包或潜影盒，再点下一步");
+				if (!blockMsg.isEmpty()) lines.add(blockMsg);
+			} else {
+				lines.add(remain(cur) <= 0 ? "本步已完成" : "合成 " + cur.ming + " ×" + remain(cur));
+				if (cur.pf != null) {
+					addGrid(lines, cur.pf);
+					lines.add("每次产出 " + cur.pf.count + " 个");
+				}
+				lines.add("只填本步剩余量，单次最多64组");
+				if (!ZhuangTai.INS.hudRows().isEmpty())
+					lines.add("基础材料还缺 " + ZhuangTai.INS.hudRows().size() + " 种");
+			}
+		}
+		List<Component> comps = new ArrayList<>();
+		for (String line : lines) comps.add(Component.literal(line));
+		g.setTooltipForNextFrame(Minecraft.getInstance().font, comps, java.util.Optional.empty(), mx, my);
+	}
+
 	private static String fit(String txt, int maxW) {
 		net.minecraft.client.gui.Font f = Minecraft.getInstance().font;
 		if (f.width(txt) <= maxW) return txt;
@@ -158,30 +287,33 @@ public class GongFangZhiYin {
 	// 返回 true 表示这次点击我们吃掉了，别再传给工作台本身
 	public static boolean onClick(Screen s, MouseButtonEvent e) {
 		if (!PeiZhi.INS.zhuGongKai) return false;
-		List<ZhuangTai.BuRow> rows = rows();
-		if (rows.isEmpty()) return false;
-		int[] pl = place(s, rows.size());
-		int x = pl[0], y = pl[1], w = pl[2];
-		for (int i = 0; i < rows.size(); i++) {
-			int ry = y + i * ROW_H;
-			// 整行都是按钮；点一下尽量填满，Shift 不再区分
-			if (GuiTool.hovered(e.x(), e.y(), x, ry, w, ROW_H - 1)) {
-				TianRu.fillMax(rows.get(i).bu);
-				return true;
+		if (ZhuangTai.INS.targets.isEmpty()) return false;
+		refresh();
+		if (steps.isEmpty()) return false;
+		int[] pl = layout(s);
+		if (!GuiTool.hovered(e.x(), e.y(), pl[0], pl[1], pl[2], pl[3])) return false;
+
+		if (idx >= steps.size()) return true;
+		QiuJie.Bu cur = current();
+		if (cur == null) return true;
+
+		if (GuiTool.hovered(e.x(), e.y(), B1[0], B1[1], B1[2], B1[3])) {
+			if (manual(cur)) {
+				tryNext(cur);
+			} else if (done.contains(cur.ming) || remain(cur) <= 0) {
+				advance();
+			} else {
+				TianRu.fillMax(cur);
 			}
+		} else if (manual(cur) && GuiTool.hovered(e.x(), e.y(), B2[0], B2[1], B2[2], B2[3])) {
+			done.add(cur.ming);
+			advance();
 		}
-		return false;
+		return true;
 	}
 
+	// 单步向导不需要滚轮翻页，全部交给工作台本身
 	public static boolean onScroll(Screen s, double mx, double my, double dy) {
-		if (!PeiZhi.INS.zhuGongKai) return false;
-		List<ZhuangTai.BuRow> rows = rows();
-		if (rows.isEmpty()) return false;
-		int[] pl = place(s, rows.size());
-		if (!GuiTool.hovered(mx, my, pl[0], pl[1], pl[2], rows.size() * ROW_H)) return false;
-		int total = ZhuangTai.INS.craftRows().size();
-		int maxPage = Math.max(0, (total - 1) / ROWS);
-		page = Math.max(0, Math.min(maxPage, page + (dy > 0 ? -1 : 1)));
-		return true;
+		return false;
 	}
 }

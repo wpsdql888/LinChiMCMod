@@ -13,14 +13,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Duration;
 
-// 启动时检测模组和数据库版本。结果落盘，24 小时内不再问服务器
+// 启动时检测一次模组和数据库版本；缓存只作断网兜底
 public class BanBen {
-	public static final String LOCAL = "1.1.1";
+	public static final String LOCAL = "1.1.2";
 	public static final String CHECK_URL = "https://lins.dnteam.top/LinChi/data.json";
 	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
-	private static final long COOLDOWN = 24L * 60 * 60 * 1000;
 	private static boolean checked = false;
 	private static boolean dbChecked = false;
+	// 本次启动是否已经成功联网拉过 data.json，避免主菜单和进世界各拉一次
+	private static volatile boolean fresh = false;
 
 	// 从 data.json 读出来的东西。db 相关字段没有就留 null
 	public static class Remote {
@@ -53,14 +54,13 @@ public class BanBen {
 	public static void checkData(Minecraft mc) {
 		Thread t = new Thread(() -> {
 			Cache c = readCache();
-			long age = c == null ? Long.MAX_VALUE : System.currentTimeMillis() - c.at;
-			boolean needNet = age > COOLDOWN || age < 0
-				|| (c != null && c.remote.dbVersion == null);
-			if (needNet) {
+			// 每次启动至少联网一次；失败才退回旧缓存
+			if (!fresh || c == null) {
 				Remote r = fetch();
 				if (r != null) {
 					writeCache(System.currentTimeMillis(), r);
 					c = new Cache(System.currentTimeMillis(), r);
+					fresh = true;
 				}
 			}
 			if (c != null && c.remote != null && c.remote.dbVersion != null)
@@ -76,22 +76,19 @@ public class BanBen {
 	public static void check(Minecraft mc, boolean allowRequest) {
 		Thread t = new Thread(() -> {
 			Cache c = readCache();
-			long age = c == null ? Long.MAX_VALUE : System.currentTimeMillis() - c.at;
-			// age<0 说明缓存时间是未来（玩家改过系统时间），一律当作过期重新拉
-			// 老版本缓存里没有 dbVersion，开了数据库更新就强制刷一次
-			boolean needNet = age > COOLDOWN || age < 0
-				|| (PeiZhi.INS.ziDongGengXinShuJu && c != null && c.remote.dbVersion == null);
-			if (allowRequest && needNet) {
+			// 本次启动还没成功联网过就拉一次；主菜单已经拉过就直接用缓存
+			if (allowRequest && (!fresh || c == null)) {
 				Remote remote = fetch();
 				if (remote != null) {
 					writeCache(System.currentTimeMillis(), remote);
 					c = new Cache(System.currentTimeMillis(), remote);
+					fresh = true;
 				}
 			}
 			if (c == null || c.remote == null) return;
 			Remote r = c.remote;
-			if (PeiZhi.INS.jianCeBanBen && mc.getCurrentServer() != null
-				&& r.version != null && isOlder(LOCAL, r.version)) {
+			// 单人/多人都在启动后检查一次，别只在多人服务器里才提示
+			if (PeiZhi.INS.jianCeBanBen && r.version != null && isOlder(LOCAL, r.version)) {
 				String v = r.version;
 				mc.execute(() -> {
 					if (mc.player == null) return;

@@ -24,11 +24,14 @@ LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the
   - Scans inventory and shulker boxes; refreshes periodically.
   - Completed rows disappear automatically.
 - Crafting guide HUD (bottom right) listing remaining crafting steps.
-- One-click crafting table fill: fills as many sets as possible (up to 64 items per slot),
-  bounded by the remaining output count and the materials actually in your inventory.
-  Clicks are sent through the server container-click path, and the remaining count refreshes
-  shortly after crafting. Materials are matched by display name; missing materials are skipped
-  silently, and shulker-box contents are not used for filling.
+- Single-step crafting table wizard on the right side of the crafting screen:
+  - Always shows only the current step; the panel stays on the right and shrinks instead of moving.
+  - `Fill this step` fills exactly the remaining amount for the current step (at most 64 sets per click).
+  - When the step output is detected, the button becomes `Next step`; completed steps do not reappear
+    even if a later step consumes their output.
+  - Mirror and other non-workbench steps show instructions and a tooltip. `Next step` checks the
+    inventory and shulker boxes for the required output; a separate `Force next step` button is
+    available when detection is too strict.
 - In-game manual, shown once on first launch and always available from the config panel.
 - The config panel shows the current mod version and includes a manual "Check updates"
   button that checks both the mod version and the item database version, then reports the result
@@ -38,7 +41,8 @@ LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the
   integrity, then downloads the latest database when needed. The local version is stored in
   `config/linchi_data_version.json` (starts at `1.0.0`), and the downloaded data goes to
   `config/linchi_data.json`. The automatic update can be disabled in the config panel.
-- Optional mod update check (multiplayer only, cached for 24 hours).
+- Startup mod update check once per launch (single-player and multiplayer); a cached result is
+  used only when the network is unavailable.
 
 ## Keybindings
 
@@ -58,7 +62,7 @@ step count, refresh interval, background opacity and HUD offsets.
 Minecraft 26.3, 26.2 and 26.1 (Fabric).
 
 Release JARs are named `LinChiMCMod-Fabric-<mod version>-<minecraft version>.jar`,
-for example `LinChiMCMod-Fabric-1.1.1-26.3.jar`.
+for example `LinChiMCMod-Fabric-1.1.2-26.3.jar`.
 
 ## Requirements
 
