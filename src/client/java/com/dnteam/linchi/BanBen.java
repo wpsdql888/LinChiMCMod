@@ -16,7 +16,8 @@ import java.time.Duration;
 // 启动时检测一次模组和数据库版本；缓存只作断网兜底
 public class BanBen {
 	public static final String LOCAL = "1.2.1";
-	public static final String CHECK_URL = "https://lins.dnteam.top/LinChi/data.json";
+	// 数据库版本检测改走 ylm.one，旧地址 lins.dnteam.top/LinChi/data.json 留个底
+	public static final String CHECK_URL = "https://ylm.one/index/download/mods/data.json";
 	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
 	// 发现新版本时聊天框里再补一条下载页链接，点了直接去模组下载站
 	public static final String DOWNLOAD_PAGE = "https://ylm.one/download/mods/index";

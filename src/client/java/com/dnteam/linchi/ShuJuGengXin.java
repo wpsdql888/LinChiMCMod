@@ -13,7 +13,8 @@ import java.time.Duration;
 // 版本号存在 config/linchi_data_version.json，数据本体在 config/linchi_data.json
 public class ShuJuGengXin {
 	private static final String DEFAULT_VERSION = "1.0.0";
-	private static final String DEFAULT_URL = "https://lins.dnteam.top/LinChi/linchi_items.json";
+	// 数据库本体下载也搬到 ylm.one，旧地址留个底
+	private static final String DEFAULT_URL = "https://ylm.one/index/download/mods/linchi_items.json";
 
 	public static Path versionFile() {
 		return Paths.get("config", "linchi_data_version.json");
