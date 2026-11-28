@@ -18,7 +18,8 @@ public class BanBen {
 	public static final String LOCAL = "1.2.1";
 	// 数据库版本检测改走 ylm.one，旧地址 lins.dnteam.top/LinChi/data.json 留个底
 	public static final String CHECK_URL = "https://ylm.one/index/download/mods/data.json";
-	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
+	// 更新说明页并到 ylm.one 下载页，旧的 lins.dnteam.top/LinChi/update.html 已 404
+	public static final String UPDATE_PAGE = "https://ylm.one/index/download/mods/index";
 	// 发现新版本时聊天框里再补一条下载页链接，点了直接去模组下载站
 	public static final String DOWNLOAD_PAGE = "https://ylm.one/download/mods/index";
 	private static boolean checked = false;
