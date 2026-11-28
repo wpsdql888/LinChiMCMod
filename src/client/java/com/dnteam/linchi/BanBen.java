@@ -15,9 +15,11 @@ import java.time.Duration;
 
 // 启动时检测一次模组和数据库版本；缓存只作断网兜底
 public class BanBen {
-	public static final String LOCAL = "1.1.2";
+	public static final String LOCAL = "1.2.1";
 	public static final String CHECK_URL = "https://lins.dnteam.top/LinChi/data.json";
 	public static final String UPDATE_PAGE = "https://lins.dnteam.top/LinChi/update.html";
+	// 发现新版本时聊天框里再补一条下载页链接，点了直接去模组下载站
+	public static final String DOWNLOAD_PAGE = "https://ylm.one/download/mods/index";
 	private static boolean checked = false;
 	private static boolean dbChecked = false;
 	// 本次启动是否已经成功联网拉过 data.json，避免主菜单和进世界各拉一次
@@ -98,6 +100,11 @@ public class BanBen {
 					Component msg = Component.literal("[LinsMagic]有新版本v" + v + "可供使用，")
 						.append(link).append("查看更新方式");
 					mc.player.sendSystemMessage(msg);
+					// 再补一条下载页链接，想直接拿 JAR 的不用去翻更新说明
+					Component down = Component.literal("点击下载")
+						.withStyle(Style.EMPTY.withClickEvent(new ClickEvent.OpenUrl(URI.create(DOWNLOAD_PAGE)))
+							.withUnderlined(true));
+					mc.player.sendSystemMessage(Component.literal("[LinsMagic] 新版 JAR ").append(down).append(" 前往下载页"));
 				});
 			}
 			// 数据库更新不受多人游戏限制，单人存档也照常检查
@@ -140,13 +147,15 @@ public class BanBen {
 			Remote r = fetch();
 			String shortMsg;
 			String chatMsg;
+			// 手动检测也要带下载链接，标记一下这次是不是查到了新版本
+			final boolean[] youNew = {false};
 			if (r == null) {
 				shortMsg = "模组检测失败\n数据库检测失败";
 				chatMsg = "检测失败：无法获取 data.json";
 			} else {
 				String mod;
 				if (r.version == null) mod = "模组版本未知";
-				else if (isOlder(LOCAL, r.version)) mod = "模组有新版本 v" + r.version;
+				else if (isOlder(LOCAL, r.version)) { mod = "模组有新版本 v" + r.version; youNew[0] = true; }
 				else mod = "模组已是最新版 v" + LOCAL;
 				String db = r.dbVersion == null ? "数据库版本未提供" : ShuJuGengXin.apply(mc, r);
 				shortMsg = mod + "\n" + db;
@@ -155,7 +164,15 @@ public class BanBen {
 			String s = shortMsg, c = chatMsg;
 			mc.execute(() -> {
 				cb.accept(s);
-				if (mc.player != null) mc.player.sendSystemMessage(Component.literal("[LinChiMCMod] " + c));
+				if (mc.player != null) {
+					mc.player.sendSystemMessage(Component.literal("[LinChiMCMod] " + c));
+					if (youNew[0]) {
+						Component down = Component.literal("点击下载")
+							.withStyle(Style.EMPTY.withClickEvent(new ClickEvent.OpenUrl(URI.create(DOWNLOAD_PAGE)))
+								.withUnderlined(true));
+						mc.player.sendSystemMessage(Component.literal("[LinChiMCMod] 新版 JAR ").append(down).append(" 前往下载页"));
+					}
+				}
 			});
 		}, "linchi-manual-check");
 		t.setDaemon(true);

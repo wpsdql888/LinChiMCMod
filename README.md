@@ -42,7 +42,15 @@ LinChiMCMod (shown in-game as LinsMagic 材料计算器) helps players track the
   `config/linchi_data_version.json` (starts at `1.0.0`), and the downloaded data goes to
   `config/linchi_data.json`. The automatic update can be disabled in the config panel.
 - Startup mod update check once per launch (single-player and multiplayer); a cached result is
-  used only when the network is unavailable.
+  used only when the network is unavailable. When a newer version is found, the chat gets two
+  clickable links: one to the update notes, one to the download page
+  (`https://ylm.one/download/mods/index`). Manual "Check updates" does the same.
+
+## Download
+
+Grab the JAR for your Minecraft version from **https://ylm.one/download/mods/index**
+(26.3 / 26.2 / 26.1). The in-game "Check updates" button also posts a clickable download link
+in chat whenever a newer mod version is available.
 
 ## Keybindings
 
@@ -62,7 +70,7 @@ step count, refresh interval, background opacity and HUD offsets.
 Minecraft 26.3, 26.2 and 26.1 (Fabric).
 
 Release JARs are named `LinChiMCMod-Fabric-<mod version>-<minecraft version>.jar`,
-for example `LinChiMCMod-Fabric-1.1.2-26.3.jar`.
+for example `LinChiMCMod-Fabric-1.2.1-26.3.jar`.
 
 ## Requirements
 
